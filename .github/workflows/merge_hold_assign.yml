@@ -22,6 +22,7 @@ jobs:
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.PRIVATE_KEY }}
+          permission-pull-requests: write
 
       - name: Put the PR on hold
         env:
