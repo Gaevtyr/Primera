@@ -13,15 +13,16 @@ jobs:
   CheckCL:
     runs-on: ubuntu-latest
     if: github.base_ref == 'master' && github.event.pull_request.draft == false
+    env:
+      APP_ID: ${{ secrets.APP_ID }}
 
     steps:
       - id: create_token
+        if: env.APP_ID != ''
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.PRIVATE_KEY }}
-
-      - run: echo "GH_TOKEN=${{ steps.create_token.outputs.token }}" >> "$GITHUB_ENV"
 
       - name: Downloading scripts
         run: |
@@ -41,5 +42,5 @@ jobs:
 
       - name: Changelog validation
         env:
-          GITHUB_TOKEN: ${{ env.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.create_token.outputs.token || github.token }}
         run: python check_changelog.py
