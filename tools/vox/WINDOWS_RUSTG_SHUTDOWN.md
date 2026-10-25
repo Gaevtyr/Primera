@@ -1,5 +1,7 @@
 # Windows: исправление времени жизни rust-g DLL
 
+Этот документ фиксирует историческую проверку исходной объединённой ветки Vox/IPC (snapshot `486f06245df75f7aeb56ade4111287f3a6563d4c`). Числа 116/116 и 92/92, а также приведённые игровые и ordinary-прогоны относятся к той ветке, а не к новым `species-runtime-shared`, `vox-independent` или `ipc-paradise-upstream`. Результаты новых отдельных рас записываются в документацию соответствующей расы. Native harness в `tools/vox` не зависит от расы; путь сохранён для минимального diff.
+
 Исправленная DLL проверена native-host тестом обеих FFI-веток, серией 40/40
 standalone-процессов и финальным игровым прогоном после всех production-фиксов:
 116/116 групп, 92/92 скриншота, естественный exit 0, `Success!`, без runtimes
@@ -9,7 +11,7 @@ warm-процессах с тем же PID. Нет raw runtimes, Application Fau
 event query, timeouts и forced exits. Точные результаты:
 [tools/rustg/VALIDATION.md](../rustg/VALIDATION.md).
 
-Финальный ordinary-прогон `tmp/server-lifecycle-1a1f0a2dca43` также подтвердил
+Исторический ordinary-прогон `tmp/server-lifecycle-1a1f0a2dca43` также подтвердил
 три startup-исправления: пустой sticky-ban набор, `research_costs=null` у
 абстрактного cyber-узла и `nearstation=null` в mapping/ruins. Cyber 8/8 и mapping
 branches 24/24 прошли; конкретный узел стоит 60 при ожидаемых 60, registry и trait
@@ -75,7 +77,7 @@ Fault offset: 0065b640
 
 ## Минимальный сценарий и повторение
 
-[repro.dm](rustg-shutdown-repro/repro.dm) загружает только DLL, выполняет
+[repro.dm.in](rustg-shutdown-repro/repro.dm.in) загружает только DLL, выполняет
 `get_version()`, а в режиме `forge` синхронно вызывает
 `iconforge_generate_headless`. Вход — один свежий DMI state `probe`, 32×32,
 четыре направления с однотонными красным, зелёным, синим и жёлтым кадрами.

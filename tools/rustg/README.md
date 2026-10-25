@@ -1,5 +1,7 @@
 # Windows rust-g: исправление времени жизни DLL
 
+Этот документ фиксирует историческую проверку исходной объединённой ветки Vox/IPC (snapshot `486f06245df75f7aeb56ade4111287f3a6563d4c`). Числа 116/116 и 92/92, а также приведённые игровые и ordinary-прогоны относятся к той ветке, а не к новым `species-runtime-shared`, `vox-independent` или `ipc-paradise-upstream`. Результаты новых отдельных рас записываются в документацию соответствующей расы. Native harness в `tools/vox` не зависит от расы; путь сохранён для минимального diff.
+
 Исправленная DLL установлена в корне сборки и проверена native-host тестами,
 40 standalone-процессами и полным игровым прогоном. Обычный сервер прошёл
 **4/4 сценария** с естественным exit 0: восемь эпох мира и четыре реальных
@@ -39,14 +41,15 @@ cargo +1.93.1 build --locked --release --target i686-pc-windows-msvc
 ```
 
 Используется upstream `.cargo/config.toml` с `+crt-static`. Внешние
-`RUSTFLAGS`, `CARGO_ENCODED_RUSTFLAGS` и `CARGO_TARGET_DIR` отклоняются, чтобы
+`RUSTFLAGS`, `CARGO_ENCODED_RUSTFLAGS`, `CARGO_BUILD_RUSTFLAGS`,
+`CARGO_TARGET_I686_PC_WINDOWS_MSVC_RUSTFLAGS` и `CARGO_TARGET_DIR` отклоняются, чтобы
 не подменить рецепт сборки. Отсутствующий Rust не загружается автоматически.
 `-OutputDirectory` позволяет явно выбрать новый каталог результата.
 
 ## CI и результат
 
 [Windows workflow](../../.github/workflows/rustg-windows.yml) запускается при
-изменениях патча, рецепта сборки или самого workflow в ветке `vox-port`,
+изменениях патча, рецепта сборки или самого workflow в ветках `vox-port`, `vox-independent`, `ipc-paradise-upstream`,
 а также через `workflow_dispatch`.
 Rust/Cargo homes находятся в каталоге временных файлов job. Используется MSVC
 готового Windows runner; установка инструментов на компьютер игрока не нужна.

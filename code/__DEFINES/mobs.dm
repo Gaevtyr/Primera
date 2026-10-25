@@ -207,10 +207,10 @@
 #define SPECIES_ZOMBIE "zombie"
 #define SPECIES_VOIDWALKER "voidwalker"
 /// BANDASTATION ADDITION START - Species
+#define SPECIES_IPC "ipc"
 #define SPECIES_VULPKANIN "vulpkanin"
 #define SPECIES_TAJARAN "tajaran"
 #define SPECIES_SKRELL "skrell"
-#define SPECIES_IPC "ipc"
 #define SPECIES_VOX "vox"
 /// BANDASTATION ADDITION END - Species
 

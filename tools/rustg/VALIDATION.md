@@ -1,8 +1,10 @@
 # Проверка Windows rust-g lifetime fix
 
+Этот документ фиксирует историческую проверку исходной объединённой ветки Vox/IPC (snapshot `486f06245df75f7aeb56ade4111287f3a6563d4c`). Числа 116/116 и 92/92, а также приведённые игровые и ordinary-прогоны относятся к той ветке, а не к новым `species-runtime-shared`, `vox-independent` или `ipc-paradise-upstream`. Результаты новых отдельных рас записываются в документацию соответствующей расы. Native harness в `tools/vox` не зависит от расы; путь сохранён для минимального diff.
+
 25 октября 2026 года исправленная DLL прошла native-host тест обеих FFI-веток,
 ABI-проверку, 40/40 standalone-процессов и полный игровой прогон с естественным
-exit 0. Финальный обычный сервер прошёл **4/4 сценария** запуска/закрытия,
+exit 0. Исторический обычный сервер прошёл **4/4 сценария** запуска/закрытия,
 включая warm reboot в том же процессе. Все проверки используют DLL с указанным
 SHA256; игровой и ordinary-прогоны выполнены после трёх startup-исправлений.
 
@@ -90,20 +92,27 @@ $byondBin = 'D:\path\to\byond\bin'
 
 .\tools\vox\rustg-shutdown-repro\run.ps1 `
   -ByondBin $byondBin `
-  -Python '.\tmp\bootstrap-cache\python-3.11.0\python.exe' `
+  -Python 'python' `
   -RustGDll '.\rust_g.dll' -Sha256 $testedSha -Repeat 5 -WaitMs 45000
-
-if ((Get-FileHash '.\rust_g.dll' -Algorithm SHA256).Hash.ToLowerInvariant() -ne $testedSha) {
-  throw 'Full-suite DLL differs from the validated binary.'
-}
-.\tools\vox\test-vox.ps1 -ByondBin $byondBin -IncludeHumanoidScreenshots
 
 .\tools\vox\test-server-lifecycle.ps1 `
   -ByondBin $byondBin `
-  -Python '.\tmp\bootstrap-cache\python-3.11.0\python.exe' `
+  -Python 'python' `
   -RustGDll '.\rust_g.dll' -Sha256 $testedSha -Repeat 1 -TimeoutSeconds 240
 ```
 
 История исходной ошибки, воспроизводившейся без игрового кода, и точное
 сопоставление fault RVA с Rayon:
 [WINDOWS_RUSTG_SHUTDOWN.md](../vox/WINDOWS_RUSTG_SHUTDOWN.md).
+
+Standalone DM-исходники хранятся как `.dm.in`: runners копируют их в ignored `tmp`
+с расширением `.dm` и записывают SHA256 именно компилируемых snapshot-файлов.
+Они не включаются в production DME. PID публикуется atomic rename после записи;
+Application Faults вне записанного окна PID сохраняются отдельно в
+`outside_lifetime_events`. ABI audit работает на Windows и проверяет экспорты и
+DLL-зависимости; наличие импорта `GetModuleHandleExW` не доказывает PIN-логику.
+Её проверяет отдельный native-host probe.
+
+Focused проверка самих инструментов: `powershell -NoProfile -File tools/vox/check-native-harness.ps1`
+покрывает два окна одного PID, событие вне времени жизни, неизвестный PID, ошибки
+чтения Application log и пять запрещённых Cargo environment overrides.
