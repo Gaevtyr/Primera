@@ -11,7 +11,8 @@
 
 /proc/get_sierra_social_catalog()
 	var/list/data = get_sierra_social_data()
-	var/list/entries = data["entries"].Copy()
+	var/list/source_entries = data["entries"]
+	var/list/entries = source_entries.Copy()
 	var/list/castes = get_skrell_castes()
 	for(var/id in castes)
 		var/list/entry = castes[id]

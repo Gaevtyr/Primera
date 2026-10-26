@@ -7,7 +7,8 @@
 		var/list/factions = json_decode(file2text('modular_bandastation/sierra_background/data/factions.json'))
 		var/list/religions = json_decode(file2text('modular_bandastation/sierra_background/data/religions.json'))
 		var/list/wiki = json_decode(file2text('modular_bandastation/sierra_background/data/wiki_species.json'))
-		var/list/subfactions = factions["entries"].Copy()
+		var/list/faction_entries = factions["entries"]
+		var/list/subfactions = faction_entries.Copy()
 		subfactions["none"] = list("name" = "Без подразделения", "description" = "Принадлежность к партии или подразделению не указана.")
 		catalog = list(
 			"culture" = cultures["entries"] + wiki["cultures"],

@@ -31,7 +31,8 @@
 		// CI has a human-only server config; fixture coverage must not depend on the local allowlist.
 		var/datum/preference/choiced/species/preference = GLOB.preference_entries[/datum/preference/choiced/species]
 		original_species_choices = preference.cached_values
-		preference.cached_values = preference.get_choices().Copy()
+		var/list/species_choices = preference.get_choices()
+		preference.cached_values = species_choices.Copy()
 		for(var/species_id in GLOB.species_list)
 			preference.cached_values |= GLOB.species_list[species_id]
 		species_choices_overridden = TRUE
