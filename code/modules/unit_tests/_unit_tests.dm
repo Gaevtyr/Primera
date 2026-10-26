@@ -427,6 +427,8 @@
 #include "../../../modular_bandastation/sierra_background/tests/languages.dm"
 #include "../../../modular_bandastation/sierra_background/tests/names.dm"
 #include "../../../modular_bandastation/sierra_background/tests/gutter.dm"
+#include "../../../modular_bandastation/sierra_background/tests/dependencies.dm"
+#include "../../../modular_bandastation/sierra_background/tests/antagonist.dm"
 
 // BANDASTATION ADDITION START - Paradise spacepod port regression tests
 #include "../../../modular_bandastation/spacepods/_defines.dm"

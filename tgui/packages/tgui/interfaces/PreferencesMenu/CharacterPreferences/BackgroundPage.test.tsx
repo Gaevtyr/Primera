@@ -4,6 +4,7 @@ import * as actions from 'tgui/events/act';
 import { gameDataAtom, resetStore, store } from 'tgui/events/store';
 
 import type {
+  AntagonistBackground,
   BackgroundCategory,
   BackgroundEntry,
   BackgroundPreference,
@@ -23,28 +24,35 @@ async function readCatalogFile(name: string) {
   ).json();
 }
 
-const [cultures, worlds, factions, religions, wiki] = await Promise.all([
-  readCatalogFile('cultures'),
-  readCatalogFile('worlds'),
-  readCatalogFile('factions'),
-  readCatalogFile('religions'),
-  readCatalogFile('wiki_species'),
-]);
+const [cultures, worlds, factions, religions, wiki, skrell] = await Promise.all(
+  [
+    readCatalogFile('cultures'),
+    readCatalogFile('worlds'),
+    readCatalogFile('factions'),
+    readCatalogFile('religions'),
+    readCatalogFile('wiki_species'),
+    readCatalogFile('skrell'),
+  ],
+);
 
 const catalog: Record<BackgroundCategory, SourceEntries> = {
   culture: { ...cultures.entries, ...wiki.cultures },
   homeworld: { ...worlds.entries, ...wiki.worlds },
   faction: factions.entries,
+  subfaction: factions.entries,
+  social: skrell.castes,
   religion: { ...religions.entries, ...wiki.religions },
 };
 
-const initialChoices: Record<BackgroundCategory, string> = {
+type CoreCategory = Exclude<BackgroundCategory, 'subfaction' | 'social'>;
+
+const initialChoices: Record<CoreCategory, string> = {
   culture: 'tsf_solar',
   homeworld: 'Earth',
   faction: 'none',
   religion: 'none',
 };
-const skrellChoices: Record<BackgroundCategory, string> = {
+const skrellChoices: Record<CoreCategory, string> = {
   culture: 'skrell_imperial',
   homeworld: 'KverrBalakk',
   faction: 'none',
@@ -54,6 +62,8 @@ const labels: Record<BackgroundCategory, string> = {
   culture: 'Культура',
   homeworld: 'Место жительства',
   faction: 'Фракция',
+  subfaction: 'Подразделение',
+  social: 'Каста',
   religion: 'Вера',
 };
 
@@ -71,11 +81,17 @@ function preferences(values = initialChoices): BackgroundPreference[] {
   }));
 }
 
-function setData(rows = preferences(), slot = 1, species = 'human') {
+function setData(
+  rows = preferences(),
+  slot = 1,
+  species = 'human',
+  antagonist?: AntagonistBackground,
+) {
   store.set(gameDataAtom, {
     active_slot: slot,
     character_preferences: { misc: { species } },
     sierra_background: rows,
+    sierra_antagonist: antagonist,
   });
 }
 
@@ -425,5 +441,258 @@ describe('BandaStation character background', () => {
     expect(
       (screen.getByLabelText(fieldName) as HTMLTextAreaElement).value,
     ).toBe(rows[0].notes);
+  });
+
+  it('uses the whole expand button and keeps it in a wrapping header flow', () => {
+    const rows = preferences();
+    setData(rows);
+    render(<TestBackground />);
+    const section = sectionFor(rows[0]);
+    const button = within(section).getByLabelText('Описание: Культура');
+    const header = button.parentElement!;
+    expect(button.classList.contains('Button')).toBe(true);
+    expect(button.closest('.Section__buttons')).toBeNull();
+    expect(header.style.display).toBe('flex');
+    expect(header.style.flexWrap).toBe('wrap');
+    const initialStyle = button.getAttribute('style');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(button.querySelector('.Button--icon')!);
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(button.querySelector('.Button__content')!);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.keyDown(button, { key: 'Enter' });
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(button.getAttribute('style')).toBe(initialStyle);
+  });
+
+  it('follows server ordering and nests the subdivision inside its faction', () => {
+    const core = preferences();
+    const subfaction: BackgroundPreference = {
+      category: 'subfaction',
+      preference: 'sierra_subfaction',
+      label: 'Подразделение',
+      value: 'none',
+      choices: ['none'],
+    };
+    const social: BackgroundPreference = {
+      category: 'social',
+      preference: 'skrell_caste',
+      label: 'Каста',
+      value: 'Qerr-Katish',
+      choices: Object.keys(skrell.castes),
+    };
+    const rows = [core[2], subfaction, core[1], social, core[0], core[3]];
+    setData(rows, 1, 'skrell');
+    const view = render(<TestBackground />);
+    const categories = Array.from(
+      document.querySelectorAll('[data-background-category]'),
+    ).map((section) => section.getAttribute('data-background-category'));
+    expect(categories).toEqual([
+      'faction',
+      'subfaction',
+      'homeworld',
+      'social',
+      'culture',
+      'religion',
+    ]);
+    expect(sectionFor(rows[0]).contains(sectionFor(subfaction))).toBe(true);
+    expect(
+      sectionFor(social).closest('[data-background-category="faction"]'),
+    ).toBeNull();
+    expect(screen.getAllByRole('textbox').length).toBe(4);
+
+    setData([core[2], core[1], core[0], core[3]]);
+    view.rerender(<TestBackground />);
+    expect(screen.queryByText('Каста')).toBeNull();
+    expect(screen.queryByText('Подразделение')).toBeNull();
+  });
+
+  it('preserves an invalid historical selection and notes until an explicit replacement', () => {
+    const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
+    try {
+      const rows = preferences();
+      const residence = rows[1];
+      residence.invalid_reason =
+        'Для этого вида постоянное проживание не подтверждено.';
+      residence.choices = [];
+      residence.empty_reason =
+        'После фильтрации не осталось подходящих поселений.';
+      residence.notes = 'История переезда и станции не должна исчезнуть.';
+      setData(rows);
+      const view = render(<TestBackground />);
+      const section = sectionFor(residence);
+      expect(section.textContent).toContain(
+        'Сохранённый выбор требует исправления',
+      );
+      expect(section.textContent).toContain(
+        catalog.homeworld[residence.value].name,
+      );
+      expect(
+        (within(section).getByRole('textbox') as HTMLTextAreaElement).value,
+      ).toBe(residence.notes);
+      fireEvent.click(
+        within(section).getByLabelText('Описание: Место жительства'),
+      );
+      expect(section.textContent).toContain(
+        plainHtml(catalog.homeworld[residence.value].description),
+      );
+      fireEvent.click(within(section).getByText(residence.label));
+      expect(section.textContent).toContain(residence.empty_reason);
+      expect(sendAct).not.toHaveBeenCalled();
+      expect(residence.value).toBe('Earth');
+
+      residence.value = 'retired_unknown_world';
+      residence.selected_name = 'Прежнее место жительства';
+      setData(rows);
+      view.rerender(<TestBackground />);
+      expect(section.textContent).toContain(residence.selected_name);
+      expect(section.textContent).toContain(
+        'Описание выбранного варианта недоступно.',
+      );
+      expect(sendAct).not.toHaveBeenCalled();
+    } finally {
+      sendAct.mockRestore();
+    }
+  });
+
+  it('keeps faith unchanged while the faction and dependent options update', () => {
+    const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
+    try {
+      const rows = preferences();
+      rows[3].value = rows[3].choices.find((id) => id !== 'none')!;
+      const faith = rows[3].value;
+      setData(rows);
+      const view = render(<TestBackground />);
+      fireEvent.click(within(sectionFor(rows[2])).getByText('Фракция'));
+      const nextFaction = rows[2].choices.find((id) => id !== rows[2].value)!;
+      const choices = sectionFor(rows[2]).querySelectorAll(
+        '[data-background-choices="faction"] .Button',
+      );
+      fireEvent.click(choices[rows[2].choices.indexOf(nextFaction)]);
+      rows[2].value = nextFaction;
+      rows[1].choices = [];
+      setData(rows);
+      view.rerender(<TestBackground />);
+      expect(sectionFor(rows[3]).textContent).toContain(
+        catalog.religion[faith].name,
+      );
+      expect(rows[3].value).toBe(faith);
+      expect(sendAct.mock.calls).toEqual([
+        [
+          'set_preference',
+          { preference: 'sierra_faction', value: nextFaction },
+        ],
+      ]);
+    } finally {
+      sendAct.mockRestore();
+    }
+  });
+
+  it('handles an empty background response without creating choices or actions', () => {
+    const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
+    try {
+      setData([]);
+      const view = render(<TestBackground />);
+      expect(
+        screen.getByText('Нет доступных настроек предыстории.'),
+      ).toBeDefined();
+      expect(screen.queryByText('Антагонист')).toBeNull();
+      expect(screen.queryByRole('textbox')).toBeNull();
+      store.set(gameDataAtom, {});
+      view.rerender(<TestBackground />);
+      expect(
+        screen.getByText('Нет доступных настроек предыстории.'),
+      ).toBeDefined();
+      expect(sendAct).not.toHaveBeenCalled();
+    } finally {
+      sendAct.mockRestore();
+    }
+  });
+
+  it('renders only the private antagonist object and commits its separate optional fields', () => {
+    const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
+    try {
+      setData();
+      const view = render(<TestBackground />);
+      expect(screen.queryByText('Антагонист')).toBeNull();
+      const profile: AntagonistBackground = {
+        organization: {
+          preference: 'sierra_antagonist_faction',
+          value: 'none',
+          choices: [
+            { id: 'none', name: 'Не задано', description: '' },
+            {
+              id: 'test_org',
+              name: 'Организация из приватных данных',
+              description: 'Приватное описание организации.\nПолный текст.',
+            },
+          ],
+        },
+        subgroup: {
+          preference: 'sierra_antagonist_subfaction',
+          value: 'none',
+          choices: [{ id: 'none', name: 'Не задано', description: '' }],
+        },
+        notes: {
+          preference: 'sierra_antagonist_notes',
+          value: 'Секретный текст анкеты',
+          max_length: 1000,
+          prompt: 'Как персонаж связан с выбранной организацией?',
+        },
+      };
+      setData(preferences(), 1, 'human', profile);
+      view.rerender(<TestBackground />);
+      expect(screen.getByText('Антагонист')).toBeDefined();
+      expect(document.body.textContent).toContain('видна только вам');
+      expect(screen.queryByText('Организация из приватных данных')).toBeNull();
+      expect(screen.queryByDisplayValue(profile.notes.value)).toBeNull();
+      expect(sendAct).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByText('Антагонист'));
+      expect(screen.queryByText(/Подгруппа/)).toBeNull();
+      fireEvent.click(screen.getByText('Организация из приватных данных'));
+      expect(sendAct).toHaveBeenLastCalledWith('set_preference', {
+        preference: profile.organization.preference,
+        value: 'test_org',
+      });
+
+      profile.organization.value = 'test_org';
+      profile.subgroup!.choices.push({
+        id: 'test_sub',
+        name: 'Подгруппа из приватных данных',
+        description: 'Полное описание подгруппы.',
+      });
+      setData(preferences(), 1, 'human', profile);
+      view.rerender(<TestBackground />);
+      expect(document.body.textContent).toContain(
+        profile.organization.choices[1].description,
+      );
+      fireEvent.click(screen.getByText('Подгруппа из приватных данных'));
+      expect(sendAct).toHaveBeenLastCalledWith('set_preference', {
+        preference: profile.subgroup!.preference,
+        value: 'test_sub',
+      });
+      const field = screen.getByLabelText(
+        'Личные подробности: Антагонист',
+      ) as HTMLTextAreaElement;
+      expect(field.maxLength).toBe(1000);
+      act(() => field.focus());
+      fireEvent.change(field, { target: { value: '<b>Личный текст</b>' } });
+      act(() => field.blur());
+      expect(sendAct).toHaveBeenLastCalledWith('set_preference', {
+        preference: profile.notes.preference,
+        value: '<b>Личный текст</b>',
+      });
+      expect(field.querySelector('b')).toBeNull();
+
+      setData(preferences(), 2);
+      view.rerender(<TestBackground />);
+      expect(screen.queryByText('Антагонист')).toBeNull();
+      expect(screen.queryByDisplayValue('<b>Личный текст</b>')).toBeNull();
+    } finally {
+      sendAct.mockRestore();
+    }
   });
 });

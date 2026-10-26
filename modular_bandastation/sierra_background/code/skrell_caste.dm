@@ -63,4 +63,5 @@
 		// Materialize the genetic choice before replacing the legacy culture in this slot.
 		preferences.read_preference(/datum/preference/choiced/skrell_caste)
 		preferences.recently_updated_keys |= type
+		return get_sierra_background_default("culture", /datum/species/skrell)
 	return ..()

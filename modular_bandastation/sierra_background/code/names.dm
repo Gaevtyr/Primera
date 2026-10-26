@@ -23,6 +23,9 @@
 		return list("name_language" = language_type, "name_label" = name_label)
 
 	var/culture = preferences.read_preference(/datum/preference/choiced/sierra_background/culture)
+	var/datum/preference/choiced/sierra_background/culture_preference = GLOB.preference_entries[/datum/preference/choiced/sierra_background/culture]
+	if(!culture_preference.is_valid(culture, preferences))
+		culture = "other"
 	var/list/culture_profile = get_sierra_background_culture_profile(culture)
 	var/profile_id = culture_profile?["name_profile"]
 	var/list/name_profiles = get_sierra_background_name_profiles()

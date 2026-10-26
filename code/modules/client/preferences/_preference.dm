@@ -308,6 +308,8 @@ GLOBAL_LIST_INIT(preference_entries_by_key, init_preference_entries_by_key())
 
 	recently_updated_keys |= preference.type
 	value_cache[preference.type] = new_value
+	// BANDASTATION ADDITION - Reconcile dependent background choices after any explicit update.
+	sanitize_sierra_background(preference.savefile_key)
 
 	if (preference.savefile_identifier == PREFERENCE_PLAYER)
 		preference.apply_to_client_updated(parent, read_preference(preference.type))

@@ -51,12 +51,13 @@
 		TEST_ASSERT(preferences.update_preference(culture, culture_id), "Could not select [culture_id] for the effects preview.")
 		var/list/ui_data = middleware.get_ui_data(null)
 		var/list/rows = ui_data["sierra_background"]
-		var/list/row = rows[1]
+		var/list/row = background_row(preferences, "culture")
 		TEST_ASSERT_EQUAL(row["category"], "culture", "Effects were attached to the wrong category.")
 		TEST_ASSERT_EQUAL(json_encode(row["language_names"]), json_encode(get_sierra_background_language_names(culture_id)), "The UI language preview is stale for [culture_id].")
 		TEST_ASSERT_EQUAL(row["name_generation"], get_sierra_background_name_generation_label(preferences), "The UI name preview is stale for [culture_id].")
-		for(var/index in 2 to length(rows))
-			var/list/other_row = rows[index]
+		for(var/list/other_row as anything in rows)
+			if(other_row["category"] == "culture")
+				continue
 			TEST_ASSERT(!("language_names" in other_row), "Residence, faction or religion must not assign upbringing languages.")
 
 /// Citizenship and residence do not automatically prove language knowledge or replace a manual name.

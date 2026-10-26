@@ -422,6 +422,8 @@ SAVEFILE UPDATING/VERSIONING - 'Simplified', or rather, more coder-friendly ~Car
 
 /datum/preferences/proc/save_character()
 	SHOULD_NOT_SLEEP(TRUE)
+	// BANDASTATION ADDITION - Validate dependencies without erasing historical biography values.
+	validate_sierra_background_for_save()
 	if(!path)
 		return FALSE
 	var/tree_key = "character[default_slot]"

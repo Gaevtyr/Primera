@@ -175,6 +175,7 @@ export type CharacterPreferencesData = {
 };
 
 export type PreferencesMenuData = {
+  sierra_antagonist?: AntagonistBackground; // BANDASTATION ADDITION - Private background
   sierra_background: BackgroundPreference[]; // BANDASTATION ADDITION - Sierra background
   character_preview_view: string;
   character_profiles: (string | null)[];
@@ -227,6 +228,8 @@ export type BackgroundCategory =
   | 'culture'
   | 'homeworld'
   | 'faction'
+  | 'subfaction'
+  | 'social'
   | 'religion';
 
 export type BackgroundEntry = {
@@ -242,12 +245,35 @@ export type BackgroundPreference = {
   label: string;
   value: string;
   choices: string[];
-  notes: string;
-  notes_preference: string;
-  notes_max_length: number;
-  notes_prompt: string;
+  notes?: string;
+  notes_preference?: string;
+  notes_max_length?: number;
+  notes_prompt?: string;
+  invalid_reason?: string;
+  selected_name?: string;
+  empty_reason?: string;
   language_names?: string[];
   name_generation?: string;
+};
+
+export type AntagonistBackgroundChoice = {
+  preference: string;
+  value: string;
+  choices: { id: string; name: string; description: string }[];
+  invalid_reason?: string;
+  selected_name?: string;
+  empty_reason?: string;
+};
+
+export type AntagonistBackground = {
+  organization: AntagonistBackgroundChoice;
+  subgroup?: AntagonistBackgroundChoice;
+  notes: {
+    preference: string;
+    value: string;
+    max_length: number;
+    prompt: string;
+  };
 };
 
 export type Seed = {

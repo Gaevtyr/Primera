@@ -301,6 +301,9 @@
 		preserved_mind.transfer_to(spawning_mob) //won't transfer key since the mind is not active
 		preserved_mind.set_original_character(spawning_mob)
 
+	// BANDASTATION ADDITION - Freeze only after job-specific profile selection and the final mind transfer.
+	spawning_mob.mind?.capture_sierra_antagonist_background(player_client.prefs)
+
 	LAZYADD(player_client.persistent_client.joined_as_slots, "[player_client.prefs.default_slot]")
 	player_client.init_verbs()
 	. = spawning_mob

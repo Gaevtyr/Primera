@@ -1,5 +1,7 @@
 param(
-    [string]$ByondBin = 'C:\Program Files (x86)\BYOND\bin'
+    [string]$ByondBin = 'C:\Program Files (x86)\BYOND\bin',
+    [string]$ConfigDirectory,
+    [switch]$IncludeGarbageCollection
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,6 +34,9 @@ $nativeTestTypes = @(
     'language_mind_swap',
     'language_key_conflicts'
 )
+if ($IncludeGarbageCollection) {
+    $nativeTestTypes += 'create_and_destroy'
+}
 
 $wrapperName = 'sierra-background.test'
 $wrapper = Join-Path $sourceRoot ($wrapperName + '.dme')
@@ -52,7 +57,11 @@ try {
     & $compiler ($wrapperName + '.dme')
     if ($LASTEXITCODE -ne 0) { throw 'Sierra background test compilation failed.' }
     $logDirectory = 'sierra-background-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
-    & $daemon ($wrapperName + '.dmb') -close -trusted -verbose -params ('log-directory=' + $logDirectory)
+    $serverParameters = 'log-directory=' + $logDirectory
+    if ($ConfigDirectory) {
+        $serverParameters += '&config-directory=' + $ConfigDirectory
+    }
+    & $daemon ($wrapperName + '.dmb') -close -trusted -verbose -params $serverParameters
     if ($LASTEXITCODE -ne 0) { throw ('Sierra background test server exited with code ' + $LASTEXITCODE + '.') }
     $logRoot = Join-Path $sourceRoot ('data/logs/' + $logDirectory)
     $daemonLog = Join-Path $logRoot 'dd.log'

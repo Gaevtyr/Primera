@@ -3,8 +3,9 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import * as actions from 'tgui/events/act';
 import { gameDataAtom, resetStore, store } from 'tgui/events/store';
 
-import type { Species } from '../types';
+import type { BackgroundPreference, Species } from '../types';
 import { ServerPrefs, useServerPrefs } from '../useServerPrefs';
+import { BackgroundPage } from './BackgroundPage';
 import { SpeciesPage } from './SpeciesPage';
 
 const donor = (await Bun.file(
@@ -14,16 +15,6 @@ const donor = (await Bun.file(
   ),
 ).json()) as {
   castes: Record<string, { name: string; description: string }>;
-};
-
-const casteData = {
-  choices: Object.keys(donor.castes),
-  display_names: Object.fromEntries(
-    Object.entries(donor.castes).map(([id, caste]) => [id, caste.name]),
-  ),
-  descriptions: Object.fromEntries(
-    Object.entries(donor.castes).map(([id, caste]) => [id, caste.description]),
-  ),
 };
 
 function species(name: string): Species {
@@ -41,17 +32,54 @@ function species(name: string): Species {
 
 function setData(
   selectedSpecies = 'skrell',
-  castes: Record<string, string> = { skrell_caste: 'Qerr-Katish' },
+  caste: string | null = 'Qerr-Katish',
   slot = 1,
 ) {
+  const rows: BackgroundPreference[] =
+    caste === null
+      ? []
+      : [
+          {
+            category: 'social',
+            preference: 'skrell_caste',
+            label: 'Каста',
+            value: caste,
+            choices: Object.keys(donor.castes),
+          },
+        ];
   store.set(gameDataAtom, {
     active_slot: slot,
     character_preview_view: 'test-preview',
     character_preferences: {
       misc: { species: selectedSpecies },
-      manually_rendered_features: castes,
+      manually_rendered_features: caste === null ? {} : { skrell_caste: caste },
     },
+    sierra_background: rows,
   });
+}
+
+function TestBackground() {
+  const defaults = useServerPrefs();
+  if (!defaults) {
+    throw new Error('Preference context defaults are missing.');
+  }
+  return (
+    <ServerPrefs.Provider
+      value={{
+        ...defaults,
+        sierra_background: {
+          culture: {},
+          homeworld: {},
+          faction: {},
+          subfaction: {},
+          religion: {},
+          social: donor.castes,
+        },
+      }}
+    >
+      <BackgroundPage />
+    </ServerPrefs.Provider>
+  );
 }
 
 function TestSpeciesPage() {
@@ -64,7 +92,6 @@ function TestSpeciesPage() {
       value={{
         ...defaults,
         species: { human: species('Человек'), skrell: species('Скрелл') },
-        skrell_caste: casteData,
       }}
     >
       <SpeciesPage closeSpecies={() => {}} />
@@ -77,87 +104,91 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
-describe('Skrell caste preference', () => {
-  it('offers all five Russian names and displays each full source description', async () => {
+describe('Skrell social background', () => {
+  it('offers all five Russian castes and their full source descriptions under Background', () => {
     const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
     try {
       setData();
-      render(<TestSpeciesPage />);
-
+      const view = render(<TestBackground />);
       expect(screen.getByText('Каста')).toBeDefined();
-      expect(
-        screen.getByText(
-          'Каста наследуется и не зависит от культуры воспитания.',
-        ),
-      ).toBeDefined();
-      expect(casteData.choices).toEqual([
+      expect(Object.keys(donor.castes)).toEqual([
         'Qerr-Katish',
         'Malish-Katish',
         'Kanin-Katish',
         'Talum-Katish',
         'Raskinta-Katish',
       ]);
-      expect(document.body.textContent).toContain(
-        donor.castes['Qerr-Katish'].description,
-      );
-
+      fireEvent.click(screen.getByText('Каста'));
+      fireEvent.click(screen.getByLabelText('Описание: Каста'));
       for (const [id, caste] of Object.entries(donor.castes)) {
-        fireEvent.click(document.querySelector('.Dropdown__control')!);
-        const option = await screen.findByText(caste.name, {
-          selector: '.Dropdown__menu--entry',
-        });
-        fireEvent.click(option);
-
+        fireEvent.click(
+          screen.getByText(caste.name, {
+            selector: '[data-background-choices="social"] .Button__content',
+          }),
+        );
         expect(sendAct).toHaveBeenLastCalledWith('set_preference', {
           preference: 'skrell_caste',
           value: id,
         });
-        expect(
-          document.querySelector('.Dropdown__selected-text')?.textContent,
-        ).toBe(caste.name);
+        setData('skrell', id);
+        view.rerender(<TestBackground />);
         expect(document.body.textContent).toContain(caste.description);
+        expect(
+          screen
+            .getByLabelText('Описание: Каста')
+            .closest('.Section')
+            ?.querySelector('.Section__titleText')?.textContent,
+        ).toContain(caste.name);
       }
+      expect(screen.queryByRole('textbox')).toBeNull();
     } finally {
       sendAct.mockRestore();
     }
   });
 
-  it('uses only the server preference availability to show the caste field', () => {
-    setData('human', {});
-    const view = render(<TestSpeciesPage />);
+  it('shows social membership only when the backend supplies its row', () => {
+    setData('human', null);
+    const view = render(<TestBackground />);
     expect(screen.queryByText('Каста')).toBeNull();
-
-    setData('skrell', {});
-    view.rerender(<TestSpeciesPage />);
+    setData('skrell', null);
+    view.rerender(<TestBackground />);
     expect(screen.queryByText('Каста')).toBeNull();
-
     setData();
-    view.rerender(<TestSpeciesPage />);
+    view.rerender(<TestBackground />);
     expect(screen.getByText('Каста')).toBeDefined();
-
-    setData('human', {});
-    view.rerender(<TestSpeciesPage />);
+    setData('human', null);
+    view.rerender(<TestBackground />);
     expect(screen.queryByText('Каста')).toBeNull();
   });
 
-  it('shows the saved caste when changing character slots and reopening the page', () => {
+  it('keeps caste out of SpeciesPage without changing the skrell_caste save key', () => {
     setData();
     const view = render(<TestSpeciesPage />);
+    expect(screen.queryByText('Каста')).toBeNull();
+    view.unmount();
+    render(<TestBackground />);
+    expect(screen.getByText('Каста')).toBeDefined();
+  });
+
+  it('shows the saved caste when changing slots and reopening Background', () => {
+    setData();
+    const view = render(<TestBackground />);
+    fireEvent.click(screen.getByLabelText('Описание: Каста'));
     expect(document.body.textContent).toContain(
       donor.castes['Qerr-Katish'].description,
     );
-
-    setData('skrell', { skrell_caste: 'Talum-Katish' }, 2);
-    view.rerender(<TestSpeciesPage />);
-    expect(document.body.textContent).toContain(
-      donor.castes['Talum-Katish'].description,
-    );
+    setData('skrell', 'Talum-Katish', 2);
+    view.rerender(<TestBackground />);
     expect(document.body.textContent).not.toContain(
       donor.castes['Qerr-Katish'].description,
     );
-
+    fireEvent.click(screen.getByLabelText('Описание: Каста'));
+    expect(document.body.textContent).toContain(
+      donor.castes['Talum-Katish'].description,
+    );
     view.unmount();
-    render(<TestSpeciesPage />);
+    render(<TestBackground />);
+    fireEvent.click(screen.getByLabelText('Описание: Каста'));
     expect(document.body.textContent).toContain(
       donor.castes['Talum-Katish'].description,
     );

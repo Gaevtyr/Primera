@@ -27,7 +27,7 @@
 
 /datum/preference/text/sierra_background_notes/homeworld
 	savefile_key = "sierra_homeworld_notes"
-	notes_prompt = "Где и в каких условиях жил ваш персонаж? Почему он уехал и какие связи с домом поддерживает?"
+	notes_prompt = "Где персонаж постоянно живёт вне работы на станции? Здесь же можно описать прежнюю родину, переезды, поселение или рабочий аванпост."
 
 /datum/preference/text/sierra_background_notes/faction
 	savefile_key = "sierra_faction_notes"

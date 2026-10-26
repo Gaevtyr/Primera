@@ -29,6 +29,8 @@
 		if (preferences.should_randomize(preference))
 			preferences.write_preference(preference, preference.create_random_value(preferences))
 
+	// BANDASTATION ADDITION - Appearance randomization may change species outside set_preference.
+	preferences.sanitize_sierra_background("species")
 	preferences.character_preview_view.update_body()
 
 	return TRUE

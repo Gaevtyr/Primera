@@ -1,5 +1,6 @@
 #include "_sierra_background.dm"
 #include "code/catalog.dm"
+#include "code/social.dm"
 #include "code/culture_profiles.dm"
 #include "code/languages.dm"
 #include "code/names.dm"
@@ -7,3 +8,4 @@
 #include "code/preferences.dm"
 #include "code/notes.dm"
 #include "code/skrell_caste.dm"
+#include "code/antagonist.dm"

@@ -2,18 +2,39 @@
 /datum/preferences/sierra_background_test/load_path(ckey, filename = "preferences.json")
 	path = "data/sierra_background_tests/[ckey]-[filename]"
 
+/datum/preferences/sierra_background_test/Destroy(force)
+	// Mock clients are allocated separately; release both sides before the garbage collector runs.
+	if(parent?.prefs == src)
+		parent.prefs = null
+	parent = null
+	return ..()
+
 /datum/unit_test/sierra_background_fixture
 	abstract_type = /datum/unit_test/sierra_background_fixture
 	var/list/test_save_paths = list()
+	var/list/original_species_choices
+	var/species_choices_overridden = FALSE
 
 /datum/unit_test/sierra_background_fixture/Destroy()
 	. = ..()
+	if(species_choices_overridden)
+		var/datum/preference/choiced/species/preference = GLOB.preference_entries[/datum/preference/choiced/species]
+		preference.cached_values = original_species_choices
+	original_species_choices = null
 	for(var/test_path in test_save_paths)
 		fdel(test_path)
 		fdel(PREFS_BACKUP_PATH(test_path))
 	test_save_paths = null
 
 /datum/unit_test/sierra_background_fixture/proc/make_preferences(datum/client_interface/mock_client)
+	if(!species_choices_overridden)
+		// CI has a human-only server config; fixture coverage must not depend on the local allowlist.
+		var/datum/preference/choiced/species/preference = GLOB.preference_entries[/datum/preference/choiced/species]
+		original_species_choices = preference.cached_values
+		preference.cached_values = preference.get_choices().Copy()
+		for(var/species_id in GLOB.species_list)
+			preference.cached_values |= GLOB.species_list[species_id]
+		species_choices_overridden = TRUE
 	if(!mock_client)
 		mock_client = allocate(/datum/client_interface)
 	var/datum/preferences/preferences = allocate(/datum/preferences/sierra_background_test, mock_client)
@@ -85,7 +106,8 @@
 			TEST_ASSERT_EQUAL(length(choices), length(unique_choices), "[species_type] offers a duplicate [category] option.")
 			TEST_ASSERT_EQUAL(get_sierra_background_default(category, species_type), choices[1], "The first offered choice must be the native species default.")
 			TEST_ASSERT_EQUAL(preference.create_informed_default_value(preferences), choices[1], "A missing preference did not get its species default.")
-			TEST_ASSERT_EQUAL(preference.deserialize("removed-background-value", preferences), choices[1], "An obsolete value did not get its species default.")
+			TEST_ASSERT_EQUAL(preference.deserialize("removed-background-value", preferences), "removed-background-value", "An obsolete text ID was silently replaced during loading.")
+			TEST_ASSERT(!preference.is_valid("removed-background-value", preferences), "Preserved historical text became interactively selectable.")
 			TEST_ASSERT_EQUAL(preference.savefile_identifier, PREFERENCE_CHARACTER, "Background must be stored per character.")
 			TEST_ASSERT(!preference.can_randomize, "Random appearance must not silently change background.")
 			for(var/choice in choices)
@@ -111,7 +133,7 @@
 	TEST_ASSERT_EQUAL(get_sierra_background_default("culture", /obj/item), "other", "An unknown native species must receive a neutral culture default.")
 	TEST_ASSERT_EQUAL(get_sierra_background_default("homeworld", /obj/item), "other", "An unknown native species must receive a neutral residence default.")
 
-/// UI inputs and edited JSON files cannot retain an unknown or species-incompatible value.
+/// Interactive input is validated, while obsolete saved text is retained for explicit owner correction.
 /datum/unit_test/sierra_background_validation
 	parent_type = /datum/unit_test/sierra_background_fixture
 
@@ -124,13 +146,18 @@
 	var/list/invalid_values = list(null, 0, 123, list("forged"), "unknown-background", "<script>forged</script>")
 	for(var/category in preference_types)
 		var/datum/preference/choiced/sierra_background/preference = GLOB.preference_entries[preference_types[category]]
-		var/list/choices = get_sierra_background_choices(category, /datum/species/human)
+		var/list/choices = get_sierra_background_choices(category, /datum/species/human, preferences.sierra_background_context(category))
+		TEST_ASSERT(preferences.update_preference(preference, choices[1]), "Could not prepare a valid baseline before hostile UI input.")
 		for(var/invalid_value in invalid_values)
 			TEST_ASSERT(!preference.is_valid(invalid_value, preferences), "[category] accepted malformed input.")
 			var/normalized = preference.deserialize(invalid_value, preferences)
-			TEST_ASSERT(normalized in choices, "[category] did not recover from malformed JSON.")
-			preferences.update_preference(preference, invalid_value)
-			TEST_ASSERT(preferences.read_preference(preference.type) in choices, "An invalid UI value escaped preference validation.")
+			if(istext(invalid_value))
+				TEST_ASSERT_EQUAL(normalized, invalid_value, "Loading an obsolete text ID destroyed historical background.")
+				TEST_ASSERT(!preferences.update_preference(preference, invalid_value), "An invalid text ID escaped direct preference validation.")
+			else
+				TEST_ASSERT(normalized in choices, "Malformed non-text JSON did not receive a valid default.")
+			TEST_ASSERT(middleware.pre_set_preference(null, preference.savefile_key, invalid_value), "The owner UI did not intercept malformed input.")
+			TEST_ASSERT(preferences.read_preference(preference.type) in choices, "Rejecting invalid UI input damaged the previous valid choice.")
 		var/valid_value = choices[length(choices)]
 		TEST_ASSERT(preferences.update_preference(preference, valid_value), "The normal preference update rejected [category].")
 		TEST_ASSERT_EQUAL(preferences.read_preference(preference.type), valid_value, "The normal preference update lost a legal [category] choice.")
@@ -141,14 +168,14 @@
 			if(alien_choice in choices)
 				continue
 			TEST_ASSERT(!preference.is_valid(alien_choice, preferences), "Human preferences accepted a Skrell-only [category] value.")
-			TEST_ASSERT(preference.deserialize(alien_choice, preferences) in choices, "Species restrictions were not enforced while loading.")
+			TEST_ASSERT_EQUAL(preference.deserialize(alien_choice, preferences), alien_choice, "Loading formerly legal foreign background destroyed the historical ID.")
 			break
 	var/list/legacy_values = list(
 		list("culture", "Earther", "tsf_solar"),
 		list("culture", "OtherCulture", "other"),
 		list("culture", "Other Culture", "other"),
 		list("faction", "Nano" + "Trasen", "Nanotrasen"),
-		list("religion", "Christianity", "none"),
+		list("religion", "Christianity", "Christianity"),
 	)
 	for(var/list/legacy_value as anything in legacy_values)
 		var/datum/preference/choiced/sierra_background/preference = GLOB.preference_entries[preference_types[legacy_value[1]]]
@@ -156,7 +183,7 @@
 	preferences.value_cache[/datum/preference/choiced/species] = /datum/species/skrell
 	var/datum/preference/choiced/sierra_background/culture/culture = GLOB.preference_entries[/datum/preference/choiced/sierra_background/culture]
 	TEST_ASSERT_EQUAL(culture.deserialize("Earther", preferences), "tsf_solar", "Legacy upbringing must remain independent from Skrell genetics.")
-	TEST_ASSERT_EQUAL(culture.deserialize("earth_upbringing", preferences), "skrell_imperial", "Loading retained a forbidden Solar birthplace culture for Skrell.")
+	TEST_ASSERT_EQUAL(culture.deserialize("earth_upbringing", preferences), "earth_upbringing", "Loading forbidden historical upbringing silently assigned a new biography.")
 	preferences.value_cache[/datum/preference/choiced/species] = /datum/species/human
 	var/datum/client_interface/legacy_client = allocate(/datum/client_interface)
 	var/datum/preferences/legacy_preferences = make_preferences(legacy_client)
@@ -170,14 +197,16 @@
 	var/datum/preferences/reloaded = make_preferences(legacy_client)
 	TEST_ASSERT_EQUAL(reloaded.read_preference(/datum/preference/choiced/sierra_background/culture), "tsf_solar", "Native JSON loading lost the Earther migration.")
 	TEST_ASSERT_EQUAL(reloaded.read_preference(/datum/preference/choiced/sierra_background/faction), "Nanotrasen", "Native JSON loading lost the legacy Nanotrasen migration.")
-	TEST_ASSERT_EQUAL(reloaded.read_preference(/datum/preference/choiced/sierra_background/religion), "none", "Native JSON loading retained unsupported donor Christianity.")
+	TEST_ASSERT_EQUAL(reloaded.read_preference(/datum/preference/choiced/sierra_background/religion), "Christianity", "Native loading silently deleted historical religion.")
+	var/list/historical_faith = background_row(reloaded, "religion")
+	TEST_ASSERT(historical_faith["invalid_reason"], "Preserving unsupported historical faith did not warn its owner.")
 	TEST_ASSERT(reloaded.save_character(), "Could not save the migrated background character.")
 	TEST_ASSERT(reloaded.save_preferences(), "Could not flush migrated background JSON.")
 	var/datum/preferences/reopened = make_preferences(legacy_client)
 	var/list/migrated_data = reopened.savefile.get_entry("character1")
 	TEST_ASSERT_EQUAL(migrated_data["sierra_culture"], "tsf_solar", "Resaving retained the old serialized culture ID.")
 	TEST_ASSERT_EQUAL(migrated_data["sierra_faction"], "Nanotrasen", "Resaving retained the old serialized faction ID.")
-	TEST_ASSERT_EQUAL(migrated_data["sierra_religion"], "none", "Resaving retained the unsupported serialized religion ID.")
+	TEST_ASSERT_EQUAL(migrated_data["sierra_religion"], "Christianity", "Resaving silently replaced historical faith.")
 
 /// Static definitions preserve the catalog, while live rows always describe the current native preference cache.
 /datum/unit_test/sierra_background_catalog_and_ui
@@ -191,7 +220,7 @@
 	var/list/catalog = get_sierra_background_catalog()
 	var/list/preference_types = background_types()
 	var/list/notes_preference_types = notes_types()
-	TEST_ASSERT_EQUAL(length(catalog), 4, "The own catalogue must contain all four categories.")
+	TEST_ASSERT_EQUAL(length(catalog), 6, "The own catalogue must include four original categories, subdivisions and social membership.")
 	for(var/category in preference_types)
 		var/list/definitions = catalog[category]
 		TEST_ASSERT(length(definitions), "The own catalogue has no [category] definitions.")
@@ -222,15 +251,19 @@
 				TEST_ASSERT_EQUAL(static_definition[field], definition[field], "The preferences asset changed the full [field] for [category]/[choice].")
 	var/list/ui_data = middleware.get_ui_data(null)
 	var/list/rows = ui_data["sierra_background"]
-	TEST_ASSERT_EQUAL(length(rows), 4, "The background UI is missing a category.")
-	var/list/expected_order = list("culture", "homeworld", "faction", "religion")
+	TEST_ASSERT_EQUAL(length(rows), 5, "Human UI must have four original categories plus optional subdivisions, without an invented social block.")
+	var/list/expected_order = list("faction", "subfaction", "homeworld", "culture", "religion")
 	for(var/index in 1 to length(expected_order))
 		var/list/row = rows[index]
 		TEST_ASSERT_EQUAL(row["category"], expected_order[index], "The background UI categories are not in the requested order.")
 	var/list/seen_categories = list()
 	for(var/list/row as anything in rows)
 		var/category = row["category"]
-		TEST_ASSERT(category in preference_types, "The background UI returned an unknown category.")
+		TEST_ASSERT((category in preference_types) || category == "subfaction", "The background UI returned an unknown category.")
+		if(category == "subfaction")
+			TEST_ASSERT_EQUAL(row["preference"], "sierra_subfaction", "Subdivision UI uses an incompatible save key.")
+			TEST_ASSERT(!("notes_preference" in row), "Subdivision invented an additional biography editor.")
+			continue
 		TEST_ASSERT(!(category in seen_categories), "The background UI duplicated a category.")
 		seen_categories += category
 		var/datum/preference/preference = GLOB.preference_entries[preference_types[category]]
@@ -241,7 +274,7 @@
 		TEST_ASSERT_EQUAL(row["notes"], "", "A new character's personal details must start empty.")
 		TEST_ASSERT_EQUAL(row["notes_max_length"], 4000, "The UI advertises an incorrect personal details limit.")
 		TEST_ASSERT(istext(row["notes_prompt"]) && length(row["notes_prompt"]), "A personal details field is missing its writing prompt.")
-		var/list/choices = get_sierra_background_choices(category, /datum/species/human)
+		var/list/choices = get_sierra_background_choices(category, /datum/species/human, preferences.sierra_background_context(category))
 		TEST_ASSERT_EQUAL(json_encode(row["choices"]), json_encode(choices), "A UI row advertises an incorrect set of species choices.")
 		TEST_ASSERT(preferences.update_preference(preference, choices[length(choices)]), "Could not change the choice for the UI refresh check.")
 		TEST_ASSERT(preferences.update_preference(notes_preference, "Личные подробности: [category]\nВторая строка."), "Could not change personal details for the UI refresh check.")
@@ -249,8 +282,9 @@
 	rows = ui_data["sierra_background"]
 	for(var/list/row as anything in rows)
 		var/category = row["category"]
-		var/list/choices = get_sierra_background_choices(category, /datum/species/human)
-		TEST_ASSERT_EQUAL(row["value"], choices[length(choices)], "The UI kept a stale value after changing [category].")
+		if(category == "subfaction")
+			continue
+		TEST_ASSERT_EQUAL(row["value"], preferences.read_preference(preference_types[category]), "The UI kept a stale native value after changing [category].")
 		TEST_ASSERT_EQUAL(row["notes"], "Личные подробности: [category]\nВторая строка.", "The UI kept stale personal details after changing [category].")
 
 /// Free text preserves Cyrillic and line breaks, strips markup and bounds characters rather than UTF-8 bytes.
@@ -340,7 +374,7 @@
 	TEST_ASSERT(preferences.update_preference(GLOB.preference_entries[/datum/preference/name/real_name], "Background Tester"), "Could not set the first slot's name.")
 	TEST_ASSERT(preferences.update_preference(GLOB.preference_entries[/datum/preference/numeric/age], 35), "Could not set the first slot's age.")
 	for(var/category in preference_types)
-		var/list/choices = get_sierra_background_choices(category, /datum/species/human)
+		var/list/choices = get_sierra_background_choices(category, /datum/species/human, preferences.sierra_background_context(category))
 		var/choice = choices[length(choices)]
 		var/datum/preference/preference = GLOB.preference_entries[preference_types[category]]
 		TEST_ASSERT(preferences.update_preference(preference, choice), "Could not set slot one's [category].")
@@ -400,7 +434,7 @@
 	var/list/notes_preference_types = notes_types()
 	for(var/category in preference_types)
 		var/datum/preference/choiced/sierra_background/preference = GLOB.preference_entries[preference_types[category]]
-		var/list/choices = get_sierra_background_choices(category, /datum/species/human)
+		var/list/choices = get_sierra_background_choices(category, /datum/species/human, preferences.sierra_background_context(category))
 		var/choice = choices[length(choices)]
 		TEST_ASSERT(preferences.update_preference(preference, choice), "Could not prepare a background choice for full preference application.")
 		preference.apply_to_human(human, choice, preferences)
