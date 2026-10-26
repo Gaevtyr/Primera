@@ -76,6 +76,26 @@
 	crawl.exit_jaunt(demon)
 	TEST_ASSERT(!is_jaunting(demon), "Shadow Crawl left a phased occupant behind.")
 
+/// Health changes reach Status, while all native stamina damage entry points remain harmless.
+/datum/unit_test/shadow_demon_vitals/Run()
+	var/mob/living/basic/demon/shadow/demon = allocate(/mob/living/basic/demon/shadow)
+	TEST_ASSERT_EQUAL(demon.maxHealth, 400, "The demon must have twice its original 200 maximum health.")
+	TEST_ASSERT_EQUAL(demon.health, 400, "The demon did not spawn at full health.")
+	TEST_ASSERT("Здоровье: 400 / 400" in demon.get_status_tab_items(), "Status did not show the demon's full health.")
+	demon.apply_damage(201, BRUTE)
+	TEST_ASSERT(!QDELETED(demon) && demon.stat != DEAD, "Damage below the new health limit killed the demon.")
+	TEST_ASSERT_EQUAL(demon.health, 199, "The new health pool did not absorb brute damage normally.")
+	TEST_ASSERT("Здоровье: 199 / 400" in demon.get_status_tab_items(), "Status did not update after damage.")
+	demon.adjust_brute_loss(-20)
+	TEST_ASSERT("Здоровье: 219 / 400" in demon.get_status_tab_items(), "Status did not update after healing.")
+	demon.apply_damage(500, STAMINA)
+	demon.adjust_stamina_loss(500)
+	demon.set_stamina_loss(500)
+	demon.adjust_stamina_loss(500, forced = TRUE)
+	demon.set_stamina_loss(500, forced = TRUE)
+	TEST_ASSERT_EQUAL(demon.get_stamina_loss(), 0, "The demon took stamina damage through a native damage entry point.")
+	TEST_ASSERT_EQUAL(demon.health, 219, "Stamina damage changed the demon's health.")
+
 /// Initialization and repeated login must not duplicate role datums or abilities.
 /datum/unit_test/shadow_demon_role/Run()
 	var/mob/living/basic/demon/shadow/demon = allocate(/mob/living/basic/demon/shadow)
@@ -207,11 +227,33 @@
 	projectile.grapple_generation = demon.block_shadow_crawl()
 	projectile.on_hit(victim)
 	TEST_ASSERT_EQUAL(victim.get_brute_loss(), 40, "Shadow Grapple did not deal its one 40-brute hit.")
+	TEST_ASSERT_EQUAL(victim.get_stamina_loss(), victim.max_stamina, "Shadow Grapple did not fully exhaust its victim.")
+	TEST_ASSERT(victim.has_status_effect(/datum/status_effect/incapacitating/stamcrit), "Shadow Grapple did not trigger native stamina exhaustion.")
 	TEST_ASSERT(victim.IsImmobilized(), "Shadow Grapple did not immobilize its victim.")
 	TEST_ASSERT_EQUAL(victim.AmountImmobilized(), 2 SECONDS, "Shadow Grapple used the wrong immobilization duration.")
 	TEST_ASSERT(!demon.block_shadow_crawl, "Hitting a living victim retained the crawl lock.")
+	victim.set_stamina_loss(0)
 	projectile.on_hit(victim)
 	TEST_ASSERT_EQUAL(victim.get_brute_loss(), 40, "Reentering the grapple hit duplicated damage.")
+	TEST_ASSERT_EQUAL(victim.get_stamina_loss(), 0, "Reentering the grapple hit exhausted its victim again.")
+
+	victim.adjust_stamina_loss(25)
+	var/obj/projectile/magic/shadow_hand/blocked_projectile = allocate(/obj/projectile/magic/shadow_hand, get_turf(victim))
+	blocked_projectile.firer = demon
+	blocked_projectile.on_hit(victim, blocked = 100)
+	TEST_ASSERT_EQUAL(victim.get_brute_loss(), 40, "A fully blocked grapple damaged its victim.")
+	TEST_ASSERT_EQUAL(victim.get_stamina_loss(), 25, "A fully blocked grapple exhausted its victim.")
+
+	var/obj/projectile/magic/shadow_hand/second_projectile = allocate(/obj/projectile/magic/shadow_hand, get_turf(victim))
+	second_projectile.firer = demon
+	second_projectile.on_hit(victim)
+	TEST_ASSERT_EQUAL(victim.get_stamina_loss(), victim.max_stamina, "Shadow Grapple did not exhaust an already tired victim.")
+
+	var/mob/living/basic/demon/shadow/immune_demon = allocate(/mob/living/basic/demon/shadow)
+	var/obj/projectile/magic/shadow_hand/immune_projectile = allocate(/obj/projectile/magic/shadow_hand, get_turf(immune_demon))
+	immune_projectile.firer = demon
+	immune_projectile.on_hit(immune_demon)
+	TEST_ASSERT_EQUAL(immune_demon.get_stamina_loss(), 0, "Shadow Grapple bypassed the demon's stamina immunity.")
 
 /// Extinguish carried equipment without removing the donor's special light counters.
 /datum/unit_test/shadow_demon_carried_lights/Run()

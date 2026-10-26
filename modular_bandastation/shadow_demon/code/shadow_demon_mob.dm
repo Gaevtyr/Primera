@@ -7,8 +7,9 @@
 	icon = 'modular_bandastation/shadow_demon/icons/shadow_demon.dmi'
 	icon_state = "shadow_demon"
 	icon_living = "shadow_demon"
-	maxHealth = 200
-	health = 200
+	maxHealth = 400
+	health = 400
+	max_stamina = 0
 	melee_damage_lower = 30
 	melee_damage_upper = 30
 	obj_damage = 80
@@ -45,6 +46,16 @@
 /mob/living/basic/demon/shadow/grant_loot()
 	var/static/list/loot = list(/obj/item/organ/heart/shadow_demon)
 	return loot
+
+/mob/living/basic/demon/shadow/get_status_tab_items()
+	. = ..()
+	. += "Здоровье: [round(health, 0.1)] / [maxHealth]"
+
+/mob/living/basic/demon/shadow/adjust_stamina_loss(amount, updating_stamina = TRUE, forced = FALSE, required_biotype = ALL)
+	return 0
+
+/mob/living/basic/demon/shadow/set_stamina_loss(amount, updating_stamina = TRUE, forced = FALSE, required_biotype = ALL)
+	return 0
 
 /mob/living/basic/demon/shadow/mind_initialize()
 	. = ..()
