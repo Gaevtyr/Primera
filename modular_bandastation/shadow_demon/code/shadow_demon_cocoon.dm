@@ -35,23 +35,25 @@
 
 /obj/structure/shadowcocoon/process(seconds_per_tick)
 	time_since_last_hallucination += seconds_per_tick
-	// The donor's 40% chance is per two-second SSobj tick.
+	// One pulse per SSobj tick also catches stationary lights without a random delay.
 	for(var/atom/target in range(4, src))
-		if(SPT_PROB(40, seconds_per_tick / 2))
-			if(istype(target, /obj/item/flashlight/flare) && !target.light_on)
-				continue
-			if(istype(target, /obj/item/weldingtool) && target.light_on)
-				shadow_demon_extinguish(target, overload = TRUE)
-				return
-			shadow_demon_extinguish(target, overload = istype(target, /obj/item/flashlight/flare))
+		if(istype(target, /obj/item/flashlight/flare) && !target.light_on)
+			continue
+		var/overload = istype(target, /obj/item/flashlight/flare) || (istype(target, /obj/item/weldingtool) && target.light_on)
+		shadow_demon_extinguish(target, overload)
 	if(!silent && time_since_last_hallucination >= rand(16, 24))
-		playsound(src, pick('modular_bandastation/shadow_demon/sound/shadowhalluc1.ogg', 'modular_bandastation/shadow_demon/sound/shadowhalluc2.ogg', 'modular_bandastation/shadow_demon/sound/shadowhalluc3.ogg', 'sound/machines/airlock/airlockopen.ogg', 'sound/machines/airlock/airlockclose.ogg', 'sound/machines/airlock/boltsup.ogg', SFX_BODYFALL, 'sound/items/weapons/egloves.ogg'), 50, TRUE)
-		time_since_last_hallucination = 0
+		play_lure_sound()
+
+/obj/structure/shadowcocoon/proc/play_lure_sound()
+	playsound(src, pick('modular_bandastation/shadow_demon/sound/shadowhalluc1.ogg', 'modular_bandastation/shadow_demon/sound/shadowhalluc2.ogg', 'modular_bandastation/shadow_demon/sound/shadowhalluc3.ogg', 'sound/machines/airlock/airlockopen.ogg', 'sound/machines/airlock/airlockclose.ogg', 'sound/machines/airlock/boltsup.ogg', SFX_BODYFALL, 'sound/items/weapons/egloves.ogg'), 50, TRUE)
+	time_since_last_hallucination = 0
 
 /obj/structure/shadowcocoon/click_alt(mob/living/user)
 	if(!istype(user, /mob/living/basic/demon/shadow) || !user.can_perform_action(src, FORBID_TELEKINESIS_REACH))
 		return NONE
 	silent = !silent
+	if(!silent)
+		play_lure_sound()
 	to_chat(user, span_notice((silent ? "Нити замирают. Кокон затихает." : "Вы изменяете нити кокона, чтобы приманить новую добычу.")))
 	return CLICK_ACTION_SUCCESS
 

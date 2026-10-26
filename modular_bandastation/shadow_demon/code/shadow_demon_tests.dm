@@ -653,7 +653,15 @@
 /datum/unit_test/shadow_demon_dynamic/body/Destroy()
 	// Antagonist deletion nulls its owner's lazy list; remove it before the native mind's QDEL_LIST cleanup.
 	for(var/datum/mind/candidate in allocated)
+		// Test-owned goals must release this mind before either enters the garbage queue.
+		for(var/datum/antagonist/antagonist as anything in candidate.antag_datums)
+			for(var/datum/objective/objective as anything in antagonist.objectives)
+				objective.owner = null
+			QDEL_LIST(antagonist.objectives)
 		candidate.remove_all_antag_datums()
+#ifdef REFERENCE_TRACKING
+		SSgarbage.reference_find_on_fail[text_ref(candidate)] = TRUE
+#endif
 	return ..()
 
 /datum/unit_test/shadow_demon_dynamic/body/Run()
