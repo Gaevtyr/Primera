@@ -5,7 +5,8 @@ Run BUILD.cmd first to prepare generated assets and the dependency versions in d
 [CmdletBinding()]
 param(
     [string]$ByondBin = (Join-Path ${env:ProgramFiles(x86)} 'BYOND\bin'),
-    [ValidateRange(30, 3600)][int]$TimeoutSeconds = 300
+    [ValidateRange(30, 3600)][int]$TimeoutSeconds = 300,
+    [switch]$AuditGarbageCollection
 )
 $ErrorActionPreference = 'Stop'
 # Detach only our junction itself: recursive tmp cleanup must never reach checkout assets.
@@ -51,15 +52,19 @@ Write-Output "Shadow Demon artifacts: $runDirectory"
 $assetJunctions = @()
 Push-Location -LiteralPath $repoRoot
 try {
-    $tests = @(Select-String -LiteralPath 'modular_bandastation\shadow_demon\code\shadow_demon_tests.dm' -Pattern '^(/datum/unit_test/[^\s(]+)/Run\(' |
+    $testSources = @(Get-ChildItem -LiteralPath 'modular_bandastation\shadow_demon\code' -Filter 'shadow_demon*tests.dm' -File | ForEach-Object { $_.FullName })
+    $tests = @(Select-String -LiteralPath $testSources -Pattern '^(/datum/unit_test/[^\s(]+)/Run\(' |
         ForEach-Object { $_.Matches[0].Groups[1].Value })
     if (-not $tests.Count) { throw 'No Shadow Demon tests found.' }
     $tests += '/datum/unit_test/organ_sanity', '/datum/unit_test/wizard_loadout', '/datum/unit_test/dynamic_ruleset_sanity', '/datum/unit_test/dynamic_unique_antag_flags', '/datum/unit_test/dcs_check_list_arguments', '/datum/unit_test/focus_only/invalid_emissives'
+    if ($AuditGarbageCollection) { $tests += '/datum/unit_test/create_and_destroy' }
     $tests = @($tests | Sort-Object -Unique)
     $lines = @('#include "tgstation.dme"') + @($tests | ForEach-Object { 'TEST_FOCUS(' + $_ + ')' })
     [IO.File]::WriteAllLines($wrapper, [string[]]$lines, $utf8NoBom)
     [IO.File]::WriteAllLines((Join-Path $runDirectory 'focused-tests.txt'), [string[]]$tests, $utf8NoBom)
-    & $compiler -DCBT -DUNIT_TESTS -DMINIMAL_CENTCOM $wrapper 2>&1 | Tee-Object -FilePath (Join-Path $runDirectory 'compile.log')
+    $compilerArguments = @('-DCBT', '-DUNIT_TESTS')
+    if (-not $AuditGarbageCollection) { $compilerArguments += '-DMINIMAL_CENTCOM' }
+    & $compiler @compilerArguments $wrapper 2>&1 | Tee-Object -FilePath (Join-Path $runDirectory 'compile.log')
     if ($LASTEXITCODE -ne 0) { throw "DM compilation failed: $runDirectory\compile.log" }
     foreach ($extension in @('.dmb', '.rsc')) {
         Move-Item -LiteralPath ([IO.Path]::ChangeExtension($wrapper, $extension)) -Destination (Join-Path $runDirectory ('shadow.test' + $extension))
@@ -74,11 +79,13 @@ try {
     Get-ChildItem -LiteralPath $repoRoot -Filter '*.dll' -File | Copy-Item -Destination $runDirectory
     New-Item -ItemType Directory -Force -Path (Join-Path $runDirectory 'data\spritesheets'), (Join-Path $runDirectory 'config') | Out-Null
     # These focused tests use station turfs, not procedural mining or space ruins.
-    $testMap = Get-Content -LiteralPath '_maps\map_jsons\runtimestation_minimal.json' -Raw | ConvertFrom-Json
+    # Native create_and_destroy also exercises shuttle-dependent objects.
+    $mapName = if ($AuditGarbageCollection) { 'runtimestation' } else { 'runtimestation_minimal' }
+    $testMap = Get-Content -LiteralPath (Join-Path '_maps\map_jsons' ($mapName + '.json')) -Raw | ConvertFrom-Json
     $testMap.space_ruin_levels = 0
     $testMap | Add-Member -NotePropertyName minetype -NotePropertyValue 'none' -Force
     [IO.File]::WriteAllText((Join-Path $runDirectory 'data\next_map.json'), ($testMap | ConvertTo-Json -Depth 10), $utf8NoBom)
-    [IO.File]::WriteAllLines((Join-Path $runDirectory 'config\maps.txt'), [string[]]@('map runtimestation_minimal', 'default', 'endmap'), $utf8NoBom)
+    [IO.File]::WriteAllLines((Join-Path $runDirectory 'config\maps.txt'), [string[]]@(('map ' + $mapName), 'default', 'endmap'), $utf8NoBom)
     $server = Start-Process -FilePath $daemon -WorkingDirectory $runDirectory -WindowStyle Hidden -PassThru -ArgumentList 'shadow.test.dmb -trusted -invisible -log console.log -params log-directory=shadow-demon'
     try {
         if (-not $server.WaitForExit($TimeoutSeconds * 1000)) { throw "Shadow Demon tests timed out: $runDirectory" }

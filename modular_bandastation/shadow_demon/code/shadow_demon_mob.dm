@@ -11,7 +11,7 @@
 	health = 200
 	melee_damage_lower = 30
 	melee_damage_upper = 30
-	obj_damage = 50
+	obj_damage = 80
 	melee_attack_cooldown = 2 SECONDS
 	move_resist = MOVE_FORCE_STRONG
 	mob_biotypes = MOB_ORGANIC | MOB_HUMANOID
@@ -178,8 +178,8 @@
 		return FALSE
 	message = html_encode(message)
 	caster.log_talk(message, LOG_SAY, tag = "shadow demon whisper to [key_name(chosen)]")
-	to_chat(caster, span_notice("Вы шепчете [chosen]: [message]"))
-	to_chat(chosen, span_deadsay("<b>Внезапно в вашей голове раздаётся демонический голос...</b> <i>[message]</i>"))
+	to_chat(caster, span_purple("<i>Вы шепчете [chosen]: [message]</i>"))
+	to_chat(chosen, span_purple("<b>Демонический шёпот в вашей голове:</b> <i>[message]</i>"))
 	for(var/mob/dead/observer/ghost in GLOB.dead_player_list)
 		to_chat(ghost, "[FOLLOW_LINK(ghost, caster)] [caster] шепчет [FOLLOW_LINK(ghost, chosen)] [chosen]: [message]")
 	return TRUE

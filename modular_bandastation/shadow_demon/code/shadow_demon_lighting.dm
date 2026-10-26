@@ -4,7 +4,7 @@
 		return
 	if(isliving(target))
 		for(var/atom/contained as anything in target.contents)
-			if(contained.light_range > 0 || contained.GetComponent(/datum/component/seclite_attachable) || istype(contained, /obj/item/mod/control) || istype(contained, /obj/item/pai_card))
+			if(contained.light_range > 0 || istype(contained, /obj/item/lighter) || contained.GetComponent(/datum/component/seclite_attachable) || istype(contained, /obj/item/mod/control) || istype(contained, /obj/item/pai_card))
 				shadow_demon_extinguish(contained, overload)
 		if(iscyborg(target))
 			var/mob/living/silicon/robot/robot = target
@@ -106,15 +106,16 @@
 		computer.update_appearance()
 		computer.update_item_action_buttons()
 		return
+	if(istype(target, /obj/item/lighter))
+		var/obj/item/lighter/lighter = target
+		lighter.set_lit(FALSE)
+		return
 	if(!overload)
 		return
 	if(istype(target, /obj/item/weldingtool))
 		var/obj/item/weldingtool/welder = target
 		welder.reagents.remove_reagent(/datum/reagent/fuel, welder.max_fuel)
 		welder.switched_off()
-	else if(istype(target, /obj/item/lighter))
-		var/obj/item/lighter/lighter = target
-		lighter.set_lit(FALSE)
 	else if(istype(target, /obj/item/match))
 		var/obj/item/match/match = target
 		match.matchburnout()
