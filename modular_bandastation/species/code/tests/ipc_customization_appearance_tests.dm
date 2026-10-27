@@ -3,10 +3,15 @@
 	var/mob/living/carbon/human/ipc = allocate(/mob/living/carbon/human/consistent)
 	ipc.set_species(/datum/species/ipc)
 	ipc.dna.features[FEATURE_IPC_CHASSIS] = /datum/ipc_chassis/morpheus::name
+	ipc.dna.features[FEATURE_IPC_CHASSIS_COLOR] = COLOR_BLACK
 	ipc.update_body_parts(update_limb_data = TRUE)
 	var/obj/item/bodypart/arm = ipc.get_bodypart(BODY_ZONE_L_ARM)
 	var/obj/item/bodypart/other_arm = ipc.get_bodypart(BODY_ZONE_R_ARM)
 	var/original_key = arm.get_cache_key()
+	var/original_color = arm.species_color
+	arm.species_color = "#123456"
+	TEST_ASSERT_NOTEQUAL(arm.get_cache_key(), original_key, "Different IPC chassis colors collided in the limb icon cache.")
+	arm.species_color = original_color
 	var/other_key = other_arm.get_cache_key()
 	var/datum/ipc_chassis/bishop/model = GLOB.ipc_chassis[/datum/ipc_chassis/bishop::name]
 	TEST_ASSERT(arm.set_ipc_chassis(model.name), "A native IPC arm rejected a compatible shell.")
@@ -97,6 +102,21 @@
 	TEST_ASSERT(ipc_customization_has_shell(head, model.icon), "Rejecting a body-only model changed the head's shell.")
 	var/obj/item/bodypart/head/robot/generic_head = allocate(/obj/item/bodypart/head/robot)
 	TEST_ASSERT(!generic_head.set_ipc_chassis(model.name), "A generic robotic head accepted unsupported IPC head customization.")
+
+/// Reused preference choices must keep the same model filters and remain unchanged by customization.
+/datum/unit_test/ipc_customization_choices/Run()
+	var/list/parts = list(allocate(/obj/item/bodypart/arm/left/robot/ipc), allocate(/obj/item/bodypart/head/robot/ipc))
+	for(var/obj/item/bodypart/part as anything in parts)
+		var/list/expected = list()
+		for(var/chassis_name in GLOB.ipc_chassis)
+			var/datum/ipc_chassis/chassis = GLOB.ipc_chassis[chassis_name]
+			if(part.body_zone == BODY_ZONE_HEAD ? chassis.has_head : chassis.has_body)
+				expected += chassis_name
+		var/list/choices = part.get_ipc_customization_choices()
+		TEST_ASSERT_EQUAL(json_encode(choices), json_encode(expected), "Customization changed the compatible model choices or their order.")
+		TEST_ASSERT(part.set_ipc_chassis(/datum/ipc_chassis/bishop::name), "The choice fixture could not customize its physical shell.")
+		TEST_ASSERT_EQUAL(json_encode(choices), json_encode(expected), "Customizing a limb mutated the shared model choices.")
+		TEST_ASSERT_EQUAL(json_encode(part.get_ipc_customization_choices()), json_encode(expected), "Customizing a limb changed later model choices.")
 
 /// Observe the rendered shell without reaching into the bodypart's protected icon configuration.
 /datum/unit_test/proc/ipc_customization_has_shell(obj/item/bodypart/limb, expected_icon)
