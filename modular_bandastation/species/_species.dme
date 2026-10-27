@@ -86,6 +86,7 @@
 #include "code/surgery/organs/internal/skrell_internal.dm"
 #include "code/surgery/organs/internal/ipc_internal.dm"
 #include "code/surgery/organs/internal/ipc_upgrades.dm"
+#include "code/surgery/ipc_customization.dm"
 #include "code/items/ipc_power_cord.dm"
 #include "code/items/ipc_fabrication.dm"
 #include "code/items/ipc_nanopaste.dm"

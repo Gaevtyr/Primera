@@ -446,6 +446,10 @@
 		. += limb_gender
 	. += limb_id
 	. += body_zone
+	// BANDASTATION ADDITION START - IPC shells with the same zone and tint can use different manufacturers.
+	if(limb_id == SPECIES_IPC)
+		. += list(icon_static, species_color)
+	// BANDASTATION ADDITION END
 	if(should_draw_greyscale && draw_color)
 		. += draw_color
 	if(is_invisible)
