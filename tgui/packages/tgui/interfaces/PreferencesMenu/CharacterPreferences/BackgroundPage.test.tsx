@@ -128,34 +128,33 @@ describe('BandaStation character background browser', () => {
     }
   });
 
-  it('previews full active catalog descriptions without saving or showing archival metadata', () => {
-    const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
-    try {
-      const rows = preferences();
-      setData(rows);
-      render(<TestBackground />);
-      for (const row of rows) {
-        open(row);
+  for (const category of ['faction', 'homeworld', 'culture', 'religion']) {
+    it(`previews every ${category} description without saving or showing archival metadata`, () => {
+      const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
+      try {
+        const rows = preferences();
+        const row = rows.find((entry) => entry.category === category)!;
+        setData(rows);
+        render(<TestBackground />);
+        const dialog = open(row);
         for (const id of row.choices) {
-          browse(row.category, id);
           const entry = catalog[row.category][id];
-          const description = screen
-            .getByRole('dialog')
-            .querySelector('.BackgroundPicker__text');
+          fireEvent.click(
+            within(dialog).getByLabelText(`Просмотреть: ${entry.name}`),
+          );
+          const description = dialog.querySelector('.BackgroundPicker__text');
           expect(description?.textContent).toBe(plainHtml(entry.description));
           if (entry.extra) {
-            expect(screen.getByRole('dialog').textContent).toContain(
-              plainHtml(entry.extra),
-            );
+            expect(dialog.textContent).toContain(plainHtml(entry.extra));
           }
         }
-        fireEvent.click(screen.getByText('Отмена'));
+        fireEvent.click(within(dialog).getByText('Отмена'));
+        expect(sendAct).not.toHaveBeenCalled();
+      } finally {
+        sendAct.mockRestore();
       }
-      expect(sendAct).not.toHaveBeenCalled();
-    } finally {
-      sendAct.mockRestore();
-    }
-  });
+    });
+  }
 
   it('saves only after explicit confirmation and waits for authoritative data', () => {
     const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
