@@ -32,14 +32,10 @@
 
 /// Actually try to pin it on
 /datum/component/pinnable_accessory/proc/try_to_pin(obj/item/clothing/accessory/badge, mob/living/carbon/human/distinguished, mob/user)
-	var/obj/item/clothing/under/distinguished_uniform = distinguished.w_uniform
-	if(!istype(distinguished_uniform))
-		distinguished.balloon_alert(user, "no uniform to pin on!")
+	// BANDASTATION EDIT START - Allow medal-specific chassis attachment using the same pinning checks and delay.
+	if(!can_pin_to(distinguished, user, feedback = TRUE))
 		return
-
-	if(!badge.can_attach_accessory(distinguished_uniform, user))
-		// Check handles feedback messages and etc
-		return
+	// BANDASTATION EDIT END
 
 	if (!silent)
 		user.visible_message(
@@ -52,7 +48,7 @@
 	if(!pin_checks(user, distinguished) || !do_after(user, pinning_time, distinguished, extra_checks = CALLBACK(src, PROC_REF(pin_checks), user, distinguished)))
 		return
 
-	var/pinned = distinguished_uniform.attach_accessory(badge, user)
+	var/pinned = attach_to_target(badge, distinguished, user) // BANDASTATION EDIT - Resolve the current target after the delay.
 	if (silent)
 		return
 
@@ -73,8 +69,19 @@
 		return FALSE
 	if(!pinner.is_holding(parent) || !pinner.Adjacent(pinning_on))
 		return FALSE
+	return can_pin_to(pinning_on, pinner) // BANDASTATION EDIT - Shared validation for uniform and chassis attachment.
+
+// BANDASTATION ADDITION START - Attachment hooks keep the ordinary pinning flow reusable for medals on a chassis.
+/datum/component/pinnable_accessory/proc/can_pin_to(mob/living/carbon/human/pinning_on, mob/pinner, feedback = FALSE)
 	var/obj/item/clothing/accessory/badge = parent
 	var/obj/item/clothing/under/pinning_on_uniform = pinning_on.w_uniform
-	if(!istype(pinning_on_uniform) || !badge.can_attach_accessory(pinning_on_uniform, pinner))
+	if(!istype(pinning_on_uniform))
+		if(feedback)
+			pinning_on.balloon_alert(pinner, "no uniform to pin on!")
 		return FALSE
-	return TRUE
+	return badge.can_attach_accessory(pinning_on_uniform, feedback ? pinner : null)
+
+/datum/component/pinnable_accessory/proc/attach_to_target(obj/item/clothing/accessory/badge, mob/living/carbon/human/distinguished, mob/user)
+	var/obj/item/clothing/under/uniform = distinguished.w_uniform
+	return uniform?.attach_accessory(badge, user)
+// BANDASTATION ADDITION END

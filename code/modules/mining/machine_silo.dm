@@ -231,7 +231,7 @@
 	if(!user_data["account_id"] || !isnum(user_data["account_id"]))
 		if(prob(5))
 			physical_receptacle.say("SILO ERR: Bank account ID not found. Initiating anti-communist silo-access policy.")
-		physical_receptacle.say("SILO ERR: No account ID found. Please contact Head of Personnel.")
+		physical_receptacle.say("SILO ERR: К ID-карте не привязан банковский счёт. Возьмите карту в руку и нажмите Alt-ПКМ, чтобы привязать свой счёт.") // BANDASTATION EDIT - Explain how to bind a replacement ID before using silo materials.
 		return COMPONENT_ORE_SILO_DENY
 	if(banned_users.Find(user_data["account_id"]))
 		physical_receptacle.say("SILO ERR: You are banned from using this ore silo.")

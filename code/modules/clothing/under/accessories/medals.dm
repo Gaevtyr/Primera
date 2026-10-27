@@ -15,18 +15,26 @@
 
 /obj/item/clothing/accessory/medal/Initialize(mapload)
 	. = ..()
-	AddComponent(/datum/component/pinnable_accessory, on_pre_pin = CALLBACK(src, PROC_REF(provide_reason)))
+	AddComponent(/datum/component/pinnable_accessory/ipc_medal, on_pre_pin = CALLBACK(src, PROC_REF(provide_reason))) // BANDASTATION EDIT - Medals also pin directly to IPC chassis.
 
 /// Input a reason for the medal for the round end screen
 /obj/item/clothing/accessory/medal/proc/provide_reason(mob/living/carbon/human/distinguished, mob/user)
+	if(awarded_to) // BANDASTATION ADDITION - Re-pinning an existing award preserves its original inscription.
+		return TRUE
 	commendation_message = tgui_input_text(user, "Reason for this commendation? It will be recorded by Nanotrasen.", "Commendation", max_length = 140)
 	return !!commendation_message
 
 /obj/item/clothing/accessory/medal/try_attach(obj/item/clothing/under/attach_to, mob/living/attacher)
-	var/mob/living/distinguished = attach_to.loc
+	// BANDASTATION EDIT START - Share the commendation with direct chassis attachment, after attachment succeeds.
+	. = ..()
+	if(.)
+		record_commendation(attach_to.loc, attacher)
+
+/obj/item/clothing/accessory/medal/proc/record_commendation(mob/living/distinguished, mob/living/attacher)
+	// BANDASTATION EDIT END
 	if(isnull(attacher) || !istype(distinguished) || distinguished == attacher || awarded_to)
 		// You can't be awarded by nothing, you can't award yourself, and you can't be awarded someone else's medal
-		return ..()
+		return // BANDASTATION EDIT - This helper only records a first award.
 
 	awarder = attacher.real_name
 	awarded_to = distinguished.real_name
@@ -37,8 +45,6 @@
 	message_admins("<b>[key_name_admin(distinguished)]</b> was given the following commendation by <b>[key_name_admin(attacher)]</b>: [commendation_message]")
 	GLOB.commendations += "[awarder] awarded <b>[awarded_to]</b> the <span class='medaltext'>[name]</span>! \n- [commendation_message]"
 	SSblackbox.record_feedback("associative", "commendation", 1, list("commender" = "[awarder]", "commendee" = "[awarded_to]", "medal" = "[src]", "reason" = commendation_message))
-
-	return ..()
 
 /obj/item/clothing/accessory/medal/update_desc(updates)
 	. = ..()
