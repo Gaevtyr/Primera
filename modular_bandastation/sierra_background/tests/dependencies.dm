@@ -17,6 +17,95 @@
 	middleware.post_set_preference(null, preference.savefile_key, value)
 	return TRUE
 
+/// Browsing the tree is read-only; confirming writes the parent and actual child together.
+/datum/unit_test/sierra_background_chooser_atomic
+	parent_type = /datum/unit_test/sierra_background_fixture
+
+/datum/unit_test/sierra_background_chooser_atomic/Run()
+	var/datum/preferences/preferences = make_preferences()
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/species, "human"), "Could not prepare chooser fixture.")
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/faction, "TSF"), "Could not set initial affiliation.")
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/subfaction, "TF_LibertyDemocracy"), "Could not set initial subdivision.")
+	var/datum/preference_middleware/sierra_background/middleware = background_middleware(preferences)
+	var/list/row = background_row(preferences, "faction")
+	var/list/children = row["choice_children"]
+	TEST_ASSERT("NTSC" in children["Nanotrasen"], "The tree cannot preview another parent's valid subsidiary.")
+	TEST_ASSERT(!("NTSC" in children["TSF"]), "The tree puts a subsidiary under an unrelated parent.")
+	TEST_ASSERT_EQUAL(preferences.read_preference(/datum/preference/choiced/sierra_background/faction), "TSF", "Previewing another parent changed the saved affiliation.")
+	TEST_ASSERT_EQUAL(preferences.read_preference(/datum/preference/choiced/sierra_background/subfaction), "TF_LibertyDemocracy", "Previewing removed the old political choice.")
+	var/list/params = list("preference" = "sierra_faction", "value" = "Nanotrasen", "subfaction" = "NTSC", "slot" = preferences.default_slot, "species" = "human")
+	TEST_ASSERT(middleware.choose_background(params, null), "A valid parent and child cannot be selected together.")
+	TEST_ASSERT_EQUAL(preferences.read_preference(/datum/preference/choiced/sierra_background/faction), "Nanotrasen", "The confirmed parent was not applied.")
+	TEST_ASSERT_EQUAL(preferences.read_preference(/datum/preference/choiced/sierra_background/subfaction), "NTSC", "The confirmed child was not applied.")
+	params["value"] = "TSF"
+	TEST_ASSERT(!middleware.choose_background(params, null), "A forged parent-child combination was accepted.")
+	TEST_ASSERT_EQUAL(preferences.read_preference(/datum/preference/choiced/sierra_background/faction), "Nanotrasen", "Rejecting an invalid child partially applied its parent.")
+	TEST_ASSERT_EQUAL(preferences.read_preference(/datum/preference/choiced/sierra_background/subfaction), "NTSC", "Rejecting an invalid child removed the previous selection.")
+	params["value"] = "Nanotrasen"
+	params["subfaction"] = "none"
+	TEST_ASSERT(middleware.choose_background(params, null), "Choosing the parent without membership requires a child.")
+	TEST_ASSERT_EQUAL(preferences.read_preference(/datum/preference/choiced/sierra_background/subfaction), "none", "Parent-only confirmation retained hidden membership.")
+
+/// The dedicated chooser accepts only an available background field in the same slot and species.
+/datum/unit_test/sierra_background_chooser_validation
+	parent_type = /datum/unit_test/sierra_background_fixture
+
+/datum/unit_test/sierra_background_chooser_validation/Run()
+	var/datum/preferences/preferences = make_preferences()
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/species, "human"), "Could not prepare validation fixture.")
+	var/datum/preference_middleware/sierra_background/middleware = background_middleware(preferences)
+	var/list/params = list("preference" = "sierra_religion", "value" = "atheism", "slot" = preferences.default_slot, "species" = "human")
+	TEST_ASSERT(middleware.choose_background(params, null), "The chooser rejected a valid independent faith.")
+	params["value"] = "agnosticism"
+	params["slot"] = preferences.default_slot + 1
+	TEST_ASSERT(!middleware.choose_background(params, null), "A confirmation for another slot was accepted.")
+	params["slot"] = preferences.default_slot
+	params["species"] = "skrell"
+	TEST_ASSERT(!middleware.choose_background(params, null), "A confirmation from an obsolete species view was accepted.")
+	params["species"] = "human"
+	params["subfaction"] = "none"
+	TEST_ASSERT(!middleware.choose_background(params, null), "A non-faction selection accepted an extra subdivision.")
+	params -= "subfaction"
+	params["value"] = list("agnosticism")
+	TEST_ASSERT(!middleware.choose_background(params, null), "The chooser accepted a list in place of a choice ID.")
+	params["preference"] = "real_name"
+	params["value"] = "Injected Name"
+	TEST_ASSERT(!middleware.choose_background(params, null), "The chooser can edit unrelated preferences.")
+	params["preference"] = "skrell_caste"
+	params["value"] = "Qerr-Katish"
+	TEST_ASSERT(!middleware.choose_background(params, null), "A human can edit a Skrell genetic feature through the chooser.")
+	TEST_ASSERT_EQUAL(preferences.read_preference(/datum/preference/choiced/sierra_background/religion), "atheism", "Rejected requests changed the last valid faith.")
+	params["preference"] = "sierra_religion"
+	params["value"] = "agnosticism"
+	preferences.current_window = PREFERENCE_TAB_GAME_PREFERENCES
+	TEST_ASSERT(!middleware.choose_background(params, null), "The chooser bypassed native character-page accessibility.")
+
+/// Dependency warnings are calculated with the same reconciliation used by native edits.
+/datum/unit_test/sierra_background_chooser_effects
+	parent_type = /datum/unit_test/sierra_background_fixture
+
+/datum/unit_test/sierra_background_chooser_effects/Run()
+	var/datum/preferences/preferences = make_preferences()
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/species, "human"), "Could not prepare effects fixture.")
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/faction, "Nanotrasen"), "Could not set the starting parent.")
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/subfaction, "NTSC"), "Could not set the starting child.")
+	var/list/resets = preferences.sierra_background_resets("sierra_faction", "TSF")
+	TEST_ASSERT_EQUAL(resets[/datum/preference/choiced/sierra_background/subfaction], "none", "Preview omitted the incompatible subsidiary reset.")
+	var/list/row = background_row(preferences, "faction")
+	var/list/effects = row["choice_effects"]
+	TEST_ASSERT(!length(effects["TSF"]), "The chooser warns about an intermediate child reset instead of the explicitly selected tree entry.")
+	TEST_ASSERT(!length(effects["Nanotrasen"]), "Preview warns about a compatible unchanged parent.")
+	TEST_ASSERT_EQUAL(preferences.read_preference(/datum/preference/choiced/sierra_background/subfaction), "NTSC", "Calculating the warning changed the character.")
+	preferences.value_cache[/datum/preference/choiced/sierra_background/culture] = "retired-culture"
+	row = background_row(preferences, "faction")
+	effects = row["choice_effects"]
+	TEST_ASSERT(length(effects["TSF"]), "The chooser hides the reset of another incompatible background field.")
+	TEST_ASSERT_EQUAL(preferences.read_preference(/datum/preference/choiced/sierra_background/culture), "retired-culture", "Calculating a warning rewrote a historical upbringing.")
+	resets = preferences.sierra_background_resets("sierra_faction", "TSF")
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/faction, "TSF"), "Could not apply the previewed edit.")
+	for(var/preference_type in resets)
+		TEST_ASSERT_EQUAL(preferences.read_preference(preference_type), resets[preference_type], "Preview and native application disagree about a dependent value.")
+
 /// Confirmed subsidiaries and political currents belong only to their actual parent.
 /datum/unit_test/sierra_background_dependency_hierarchy
 	parent_type = /datum/unit_test/sierra_background_fixture

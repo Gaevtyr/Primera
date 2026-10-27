@@ -118,29 +118,31 @@ describe('Skrell social background', () => {
         'Talum-Katish',
         'Raskinta-Katish',
       ]);
-      fireEvent.click(screen.getByText('Каста'));
-      fireEvent.click(screen.getByLabelText('Описание: Каста'));
       for (const [id, caste] of Object.entries(donor.castes)) {
-        fireEvent.click(
-          screen.getByText(caste.name, {
-            selector: '[data-background-choices="social"] .Button__content',
-          }),
+        fireEvent.click(screen.getByLabelText('Выбор: Каста'));
+        fireEvent.click(screen.getByLabelText(`Просмотреть: ${caste.name}`));
+        expect(screen.getByRole('dialog').textContent).toContain(
+          caste.description,
         );
-        expect(sendAct).toHaveBeenLastCalledWith('set_preference', {
-          preference: 'skrell_caste',
-          value: id,
-        });
+        expect(screen.queryByLabelText('Текст заметки: Каста')).toBeNull();
+        if (id !== 'Qerr-Katish') {
+          fireEvent.click(screen.getByText('Выбрать'));
+          expect(sendAct).toHaveBeenLastCalledWith('sierra_background_choose', {
+            preference: 'skrell_caste',
+            value: id,
+            slot: 1,
+            species: 'skrell',
+          });
+        } else {
+          expect(sendAct).not.toHaveBeenCalled();
+          fireEvent.click(screen.getByText('Отмена'));
+        }
         setData('skrell', id);
         view.rerender(<TestBackground />);
-        expect(document.body.textContent).toContain(caste.description);
-        expect(
-          screen
-            .getByLabelText('Описание: Каста')
-            .closest('.Section')
-            ?.querySelector('.Section__titleText')?.textContent,
-        ).toContain(caste.name);
+        expect(screen.getByLabelText('Выбор: Каста').textContent).toContain(
+          caste.name,
+        );
       }
-      expect(screen.queryByRole('textbox')).toBeNull();
     } finally {
       sendAct.mockRestore();
     }
@@ -173,7 +175,7 @@ describe('Skrell social background', () => {
   it('shows the saved caste when changing slots and reopening Background', () => {
     setData();
     const view = render(<TestBackground />);
-    fireEvent.click(screen.getByLabelText('Описание: Каста'));
+    fireEvent.click(screen.getByLabelText('Выбор: Каста'));
     expect(document.body.textContent).toContain(
       donor.castes['Qerr-Katish'].description,
     );
@@ -182,13 +184,13 @@ describe('Skrell social background', () => {
     expect(document.body.textContent).not.toContain(
       donor.castes['Qerr-Katish'].description,
     );
-    fireEvent.click(screen.getByLabelText('Описание: Каста'));
+    fireEvent.click(screen.getByLabelText('Выбор: Каста'));
     expect(document.body.textContent).toContain(
       donor.castes['Talum-Katish'].description,
     );
     view.unmount();
     render(<TestBackground />);
-    fireEvent.click(screen.getByLabelText('Описание: Каста'));
+    fireEvent.click(screen.getByLabelText('Выбор: Каста'));
     expect(document.body.textContent).toContain(
       donor.castes['Talum-Katish'].description,
     );

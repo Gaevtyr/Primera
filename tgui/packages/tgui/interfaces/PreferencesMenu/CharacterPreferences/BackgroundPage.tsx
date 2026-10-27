@@ -1,9 +1,11 @@
-import { type ReactNode, useState } from 'react';
+import { useState } from 'react';
 import { useBackend } from 'tgui/backend';
 import { sanitizeText } from 'tgui/sanitize';
 import {
   Box,
   Button,
+  Input,
+  Modal,
   NoticeBox,
   Section,
   Stack,
@@ -21,11 +23,16 @@ import { useServerPrefs } from '../useServerPrefs';
 
 export function BackgroundPage() {
   const { data } = useBackend<PreferencesMenuData>();
+  const characterKey = `${data.active_slot}-${data.character_preferences?.misc?.species}`;
+  return <BackgroundContents key={characterKey} />;
+}
+
+function BackgroundContents() {
+  const { data } = useBackend<PreferencesMenuData>();
   const serverData = useServerPrefs();
   const rows = data.sierra_background ?? [];
-  const faction = rows.find((row) => row.category === 'faction');
   const subfaction = rows.find((row) => row.category === 'subfaction');
-  const characterKey = `${data.active_slot}-${data.character_preferences?.misc?.species}`;
+  const faction = rows.find((row) => row.category === 'faction');
 
   return (
     <Stack vertical>
@@ -39,29 +46,20 @@ export function BackgroundPage() {
         .map((preference) => (
           <Stack.Item key={preference.category}>
             <BackgroundCategory
-              key={`${characterKey}-${preference.category}`}
               preference={preference}
               entries={
                 serverData?.sierra_background?.[preference.category] ?? {}
               }
-              nested={
-                preference.category === 'faction' && subfaction ? (
-                  <BackgroundCategory
-                    key={`${characterKey}-subfaction`}
-                    preference={subfaction}
-                    entries={serverData?.sierra_background?.subfaction ?? {}}
-                  />
-                ) : undefined
+              subfaction={
+                preference.category === 'faction' ? subfaction : undefined
               }
+              childEntries={serverData?.sierra_background?.subfaction ?? {}}
             />
           </Stack.Item>
         ))}
       {data.sierra_antagonist && (
         <Stack.Item>
-          <PrivateAntagonist
-            key={characterKey}
-            profile={data.sierra_antagonist}
-          />
+          <PrivateAntagonist profile={data.sierra_antagonist} />
         </Stack.Item>
       )}
     </Stack>
@@ -71,169 +69,74 @@ export function BackgroundPage() {
 function BackgroundCategory(props: {
   preference: BackgroundPreference;
   entries: Record<string, BackgroundEntry>;
-  nested?: ReactNode;
+  subfaction?: BackgroundPreference;
+  childEntries: Record<string, BackgroundEntry>;
 }) {
-  const { preference, entries, nested } = props;
+  const { preference, entries, subfaction, childEntries } = props;
   const { act } = useBackend<PreferencesMenuData>();
-  const [showChoices, setShowChoices] = useState(false);
-  const [showDescription, setShowDescription] = useState(false);
-  const selected = entries[preference.value];
-  const selectedName =
-    preference.selected_name ?? selected?.name ?? preference.value;
-  const descriptionId = `background-description-${preference.category}`;
+  const [choosing, setChoosing] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
+  const name =
+    preference.selected_name ??
+    entries[preference.value]?.name ??
+    preference.value;
+  const childName =
+    subfaction && subfaction.value !== 'none'
+      ? (subfaction.selected_name ??
+        childEntries[subfaction.value]?.name ??
+        subfaction.value)
+      : undefined;
 
   return (
-    <Section
-      data-background-category={preference.category}
-      title={
-        <Box
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '0.5em',
-          }}
-        >
-          <Box
-            style={{ flex: '1 1 18em', minWidth: 0, overflowWrap: 'anywhere' }}
-          >
-            <Button
-              color="transparent"
-              icon={showChoices ? 'chevron-down' : 'chevron-right'}
-              aria-expanded={showChoices}
-              onClick={() => setShowChoices(!showChoices)}
-            >
-              {preference.label}
-            </Button>
-            {' — '}
-            {selectedName || 'Не выбрано'}
-          </Box>
-          <Button
-            icon={showDescription ? 'minus' : 'plus'}
-            selected={showDescription}
-            aria-label={`Описание: ${preference.label}`}
-            aria-expanded={showDescription}
-            aria-controls={descriptionId}
-            style={{ flexShrink: 0, minHeight: '2.2em', margin: 0 }}
-            onClick={() => setShowDescription(!showDescription)}
-          >
-            {showDescription ? 'Скрыть' : 'Расширить'}
-          </Button>
+    <Section data-background-category={preference.category}>
+      <Box className="Background__row">
+        <Box bold className="Background__label">
+          {preference.label}
         </Box>
-      }
-    >
-      {preference.invalid_reason && (
-        <NoticeBox danger>
-          <b>Сохранённый выбор требует исправления: {selectedName}.</b>{' '}
-          {preference.invalid_reason} Выберите допустимый вариант. Личные
-          подробности сохранены.
+        <Button
+          className="Background__current"
+          icon="chevron-right"
+          iconPosition="right"
+          aria-label={`Выбор: ${preference.label}`}
+          onClick={() => setChoosing(true)}
+        >
+          {childName ? `${name} · ${childName}` : name || 'Не выбрано'}
+        </Button>
+        {preference.notes_preference && (
+          <Button
+            color="transparent"
+            icon="pen"
+            aria-label={`Личные подробности: ${preference.label}`}
+            aria-expanded={showNotes}
+            tooltip="Личные подробности"
+            onClick={() => setShowNotes(!showNotes)}
+          >
+            {preference.notes ? 'Есть заметка' : 'Заметка'}
+          </Button>
+        )}
+      </Box>
+      {(preference.invalid_reason || subfaction?.invalid_reason) && (
+        <NoticeBox danger mt={1}>
+          Сохранённый выбор требует исправления:{' '}
+          {preference.invalid_reason ? name : (childName ?? name)}.{' '}
+          {preference.invalid_reason ?? subfaction?.invalid_reason}
         </NoticeBox>
       )}
-      {showDescription && (
-        <Box id={descriptionId}>
-          {selected ? (
-            <>
-              <Box
-                style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
-                dangerouslySetInnerHTML={{
-                  __html: sanitizeText(selected.description),
-                }}
-              />
-              {!!selected.extra && (
-                <Box
-                  mt={1}
-                  style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
-                  dangerouslySetInnerHTML={{
-                    __html: sanitizeText(selected.extra),
-                  }}
-                />
-              )}
-            </>
-          ) : (
-            <Box color="label">Описание выбранного варианта недоступно.</Box>
-          )}
+      {preference.category === 'culture' && preference.language_names && (
+        <Box color="label" mt={0.5}>
+          Языки воспитания:{' '}
+          {preference.language_names.join(', ') || 'дополнительных нет'}
         </Box>
       )}
-      {showChoices && (
-        <Box
-          mt={showDescription ? 1 : 0}
-          data-background-choices={preference.category}
-        >
-          {preference.choices.length ? (
-            preference.choices.map((id) => (
-              <Button
-                key={id}
-                selected={id === preference.value}
-                onClick={() => {
-                  act('set_preference', {
-                    preference: preference.preference,
-                    value: id,
-                  });
-                  setShowDescription(true);
-                }}
-                style={{ whiteSpace: 'normal', maxWidth: '100%' }}
-              >
-                {entries[id]?.name ?? id}
-              </Button>
-            ))
-          ) : (
-            <NoticeBox>
-              {preference.empty_reason ??
-                'Нет доступных вариантов для текущих настроек персонажа.'}
-            </NoticeBox>
-          )}
-        </Box>
-      )}
-      {nested && (
-        <Box
-          mt={1}
-          pl={1}
-          style={{ borderLeft: '2px solid var(--color-primary)', minWidth: 0 }}
-        >
-          {nested}
-        </Box>
-      )}
-      {preference.category === 'culture' &&
-        (preference.language_names || preference.name_generation) && (
-          <Box mt={1}>
-            {preference.language_names && (
-              <Box>
-                <b>Языки воспитания:</b>{' '}
-                {preference.language_names.length
-                  ? preference.language_names.join(', ')
-                  : 'Дополнительные языки не добавляются.'}
-              </Box>
-            )}
-            {!!preference.language_names?.length && (
-              <Box color="label" fontSize="0.9em">
-                Знание языка не гарантирует возможность говорить на нём.
-              </Box>
-            )}
-            {preference.name_generation && (
-              <>
-                <Box mt={0.5}>
-                  <b>Имена:</b> {preference.name_generation}
-                </Box>
-                <Box color="label" fontSize="0.9em">
-                  Смена воспитания сохраняет введённое имя. Для нового имени
-                  используйте кнопку генерации.
-                </Box>
-              </>
-            )}
-          </Box>
-        )}
-      {preference.notes_preference && (
-        <>
-          <Box mt={1} bold>
-            Личные подробности
-          </Box>
+      {showNotes && preference.notes_preference && (
+        <Box mt={1}>
           <Box color="label" mb={0.5}>
             {preference.notes_prompt}
           </Box>
           <TextArea
             fluid
             height="6em"
-            aria-label={`Личные подробности: ${preference.label}`}
+            aria-label={`Текст заметки: ${preference.label}`}
             value={preference.notes ?? ''}
             maxLength={preference.notes_max_length}
             onBlur={(value) => {
@@ -246,12 +149,269 @@ function BackgroundCategory(props: {
             }}
           />
           <Box color="label" fontSize="0.9em" mt={0.5}>
-            Необязательно. Сохраняется при выходе из поля. Shift+Enter — новая
-            строка.
+            Видно только вам. Сохраняется при выходе из поля. Shift+Enter —
+            новая строка.
           </Box>
-        </>
+        </Box>
+      )}
+      {choosing && (
+        <BackgroundPicker
+          preference={preference}
+          entries={entries}
+          subfaction={subfaction}
+          childEntries={childEntries}
+          close={() => setChoosing(false)}
+        />
       )}
     </Section>
+  );
+}
+
+function BackgroundPicker(props: {
+  preference: BackgroundPreference;
+  entries: Record<string, BackgroundEntry>;
+  subfaction?: BackgroundPreference;
+  childEntries: Record<string, BackgroundEntry>;
+  close: () => void;
+}) {
+  const { preference, entries, subfaction, childEntries, close } = props;
+  const { act, data } = useBackend<PreferencesMenuData>();
+  const [query, setQuery] = useState('');
+  const [preview, setPreview] = useState(preference.value);
+  const [child, setChild] = useState(subfaction?.value ?? 'none');
+  const [expanded, setExpanded] = useState<string[]>([preference.value]);
+  const children = preference.choice_children ?? {};
+  const hasChild = child !== 'none';
+  const entry = hasChild ? childEntries[child] : entries[preview];
+  const valid =
+    preference.choices.includes(preview) &&
+    (!hasChild || !!children[preview]?.includes(child));
+  const current =
+    preview === preference.value && (!subfaction || child === subfaction.value);
+  const effects = preference.choice_effects?.[preview] ?? [];
+  const search = query.trim().toLocaleLowerCase();
+  const matches = (id: string, source: Record<string, BackgroundEntry>) =>
+    (source[id]?.name ?? id).toLocaleLowerCase().includes(search);
+  const roots = preference.choices.filter(
+    (id) =>
+      matches(id, entries) ||
+      children[id]?.some((childId) => matches(childId, childEntries)),
+  );
+
+  return (
+    <Modal className="BackgroundPicker" onEscape={close}>
+      <div
+        className="BackgroundPicker__dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Выбор: ${preference.label}`}
+      >
+        <Box className="BackgroundPicker__header">
+          <Box bold fontSize="1.2em">
+            {preference.label}
+          </Box>
+          <Button
+            icon="times"
+            color="transparent"
+            aria-label="Закрыть выбор"
+            onClick={close}
+          />
+        </Box>
+        <Box className="BackgroundPicker__body">
+          <Box className="BackgroundPicker__navigation">
+            <Input
+              fluid
+              autoFocus
+              placeholder="Поиск по названию"
+              aria-label="Поиск вариантов"
+              value={query}
+              onChange={setQuery}
+            />
+            <Box
+              className="BackgroundPicker__list"
+              data-background-choices={preference.category}
+            >
+              {!preference.choices.length && (
+                <NoticeBox>
+                  {preference.empty_reason ??
+                    'Нет доступных вариантов для текущих настроек персонажа.'}
+                </NoticeBox>
+              )}
+              {!!preference.choices.length && !roots.length && (
+                <Box color="label">Ничего не найдено.</Box>
+              )}
+              {roots.map((id) => {
+                const childIds = children[id] ?? [];
+                const opened = expanded.includes(id) || !!search;
+                return (
+                  <Box key={id} mb={0.25}>
+                    <Box className="BackgroundPicker__branch">
+                      {!!childIds.length && (
+                        <Button
+                          color="transparent"
+                          icon={opened ? 'chevron-down' : 'chevron-right'}
+                          aria-label={`Подразделения: ${entries[id]?.name ?? id}`}
+                          aria-expanded={opened}
+                          onClick={() =>
+                            setExpanded(
+                              opened
+                                ? expanded.filter((value) => value !== id)
+                                : [...expanded, id],
+                            )
+                          }
+                        />
+                      )}
+                      <Button
+                        fluid
+                        className="BackgroundPicker__option"
+                        selected={preview === id && !hasChild}
+                        icon={
+                          preference.value === id &&
+                          (!subfaction || subfaction.value === 'none')
+                            ? 'check'
+                            : undefined
+                        }
+                        aria-label={`Просмотреть: ${entries[id]?.name ?? id}`}
+                        onClick={() => {
+                          setPreview(id);
+                          setChild('none');
+                        }}
+                      >
+                        {entries[id]?.name ?? id}
+                      </Button>
+                    </Box>
+                    {opened &&
+                      childIds
+                        .filter(
+                          (childId) =>
+                            !search ||
+                            matches(id, entries) ||
+                            matches(childId, childEntries),
+                        )
+                        .map((childId) => (
+                          <Box key={childId} ml={1.5} mt={0.25}>
+                            <Button
+                              fluid
+                              className="BackgroundPicker__option"
+                              selected={preview === id && child === childId}
+                              icon={
+                                preference.value === id &&
+                                subfaction?.value === childId
+                                  ? 'check'
+                                  : undefined
+                              }
+                              aria-label={`Просмотреть: ${childEntries[childId]?.name ?? childId}`}
+                              onClick={() => {
+                                setPreview(id);
+                                setChild(childId);
+                              }}
+                            >
+                              {childEntries[childId]?.name ?? childId}
+                            </Button>
+                          </Box>
+                        ))}
+                  </Box>
+                );
+              })}
+            </Box>
+          </Box>
+          <Box className="BackgroundPicker__description">
+            {hasChild && (
+              <Box color="label" mb={0.5}>
+                {entries[preview]?.name ?? preview}
+              </Box>
+            )}
+            <Box bold fontSize="1.25em" mb={1}>
+              {entry?.name ?? preference.selected_name ?? preview}
+            </Box>
+            {entry ? (
+              <>
+                <Box
+                  className="BackgroundPicker__text"
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeText(entry.description),
+                  }}
+                />
+                {!!entry.extra && (
+                  <Box
+                    mt={1}
+                    className="BackgroundPicker__text"
+                    dangerouslySetInnerHTML={{
+                      __html: sanitizeText(entry.extra),
+                    }}
+                  />
+                )}
+              </>
+            ) : (
+              <Box color="label">Описание выбранного варианта недоступно.</Box>
+            )}
+            {!valid && (
+              <NoticeBox danger mt={1}>
+                Этот вариант недоступен для текущей анкеты. Выберите другой.
+              </NoticeBox>
+            )}
+            {preference.category === 'culture' &&
+              preview === preference.value && (
+                <Box mt={1}>
+                  {preference.language_names && (
+                    <Box>
+                      <b>Языки воспитания:</b>{' '}
+                      {preference.language_names.join(', ') ||
+                        'Дополнительные языки не добавляются.'}
+                    </Box>
+                  )}
+                  {!!preference.language_names?.length && (
+                    <Box color="label">
+                      Знание языка не гарантирует возможность говорить на нём.
+                    </Box>
+                  )}
+                  {preference.name_generation && (
+                    <Box mt={0.5}>
+                      <b>Имена:</b> {preference.name_generation}
+                    </Box>
+                  )}
+                </Box>
+              )}
+            {preference.category === 'culture' && (
+              <Box color="label" mt={1}>
+                Смена воспитания сохраняет введённое имя. Для нового имени
+                используйте кнопку генерации.
+              </Box>
+            )}
+            {!current && !!effects.length && (
+              <NoticeBox mt={1}>
+                <Box bold>При выборе изменится:</Box>
+                {effects.map((effect) => (
+                  <Box key={effect}>{effect}</Box>
+                ))}
+              </NoticeBox>
+            )}
+          </Box>
+        </Box>
+        <Box className="BackgroundPicker__footer">
+          <Button onClick={close}>Отмена</Button>
+          <Button
+            icon="check"
+            selected={current && valid}
+            disabled={!valid || current}
+            onClick={() => {
+              act('sierra_background_choose', {
+                preference: preference.preference,
+                value: preview,
+                ...(preference.category === 'faction'
+                  ? { subfaction: child }
+                  : {}),
+                slot: data.active_slot,
+                species: data.character_preferences?.misc?.species,
+              });
+              close();
+            }}
+          >
+            {current && valid ? 'Выбрано' : 'Выбрать'}
+          </Button>
+        </Box>
+      </div>
+    </Modal>
   );
 }
 

@@ -245,6 +245,8 @@ export type BackgroundPreference = {
   label: string;
   value: string;
   choices: string[];
+  choice_children?: Record<string, string[]>;
+  choice_effects?: Record<string, string[]>;
   notes?: string;
   notes_preference?: string;
   notes_max_length?: number;

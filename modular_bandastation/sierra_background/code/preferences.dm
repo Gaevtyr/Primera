@@ -109,8 +109,8 @@
 		context["social"] = ispath(species_type, /datum/species/skrell) ? read_preference(/datum/preference/choiced/skrell_caste) : read_preference(/datum/preference/choiced/sierra_background/social)
 	return context
 
-/// Explicit edits reset only incompatible descendants. Passive reads never rewrite old biographies.
-/datum/preferences/proc/sanitize_sierra_background(changed_preference)
+/// Preview and application share the same dependency reconciliation.
+/datum/preferences/proc/sierra_background_resets(changed_preference, preview_value = null)
 	var/list/dependent_categories = list()
 	switch(changed_preference)
 		if("species")
@@ -121,6 +121,8 @@
 			dependent_categories = list("social", "culture")
 		if("sierra_subfaction", "sierra_social", "skrell_caste")
 			dependent_categories = list("culture")
+	if(!length(dependent_categories))
+		return list()
 	var/list/preference_types = list(
 		"faction" = /datum/preference/choiced/sierra_background/faction,
 		"subfaction" = /datum/preference/choiced/sierra_background/subfaction,
@@ -128,15 +130,44 @@
 		"social" = /datum/preference/choiced/sierra_background/social,
 		"culture" = /datum/preference/choiced/sierra_background/culture,
 	)
+	var/species_type = read_preference(/datum/preference/choiced/species)
+	var/list/values = list(
+		"faction" = read_preference(/datum/preference/choiced/sierra_background/faction),
+		"homeworld" = read_preference(/datum/preference/choiced/sierra_background/homeworld),
+		"social" = ispath(species_type, /datum/species/skrell) ? read_preference(/datum/preference/choiced/skrell_caste) : read_preference(/datum/preference/choiced/sierra_background/social),
+	)
+	if(!isnull(preview_value))
+		var/datum/preference/choiced/sierra_background/changed = GLOB.preference_entries_by_key[changed_preference]
+		if(istype(changed))
+			values[changed.background_category] = preview_value
+		else if(changed_preference == "skrell_caste")
+			values["social"] = preview_value
+	var/list/resets = list()
 	for(var/category in dependent_categories)
 		var/preference_type = preference_types[category]
 		var/datum/preference/choiced/sierra_background/preference = GLOB.preference_entries[preference_type]
 		var/value = read_preference(preference_type)
-		if(!preference.is_valid(value, src))
+		var/list/context = list()
+		if(category != "faction")
+			context["faction"] = values["faction"]
+		if(category in list("social", "culture"))
+			context["homeworld"] = values["homeworld"]
+		if(category == "culture")
+			context["social"] = values["social"]
+		var/list/choices = get_sierra_background_choices(category, species_type, context)
+		if(!(value in choices))
 			var/neutral_value = get_sierra_background_neutral(preference.background_category)
-			if(preference.is_valid(neutral_value, src))
-				value_cache[preference_type] = neutral_value
-				recently_updated_keys |= preference_type
+			if(neutral_value in choices)
+				resets[preference_type] = neutral_value
+				values[category] = neutral_value
+	return resets
+
+/// Explicit edits reset only incompatible descendants. Passive reads never rewrite old biographies.
+/datum/preferences/proc/sanitize_sierra_background(changed_preference)
+	var/list/resets = sierra_background_resets(changed_preference)
+	for(var/preference_type in resets)
+		value_cache[preference_type] = resets[preference_type]
+		recently_updated_keys |= preference_type
 
 /// Revalidate before native serialization, including direct updates outside the UI action.
 /datum/preferences/proc/validate_sierra_background_for_save()
@@ -150,6 +181,63 @@
 	return valid
 
 /datum/preference_middleware/sierra_background
+	action_delegations = list("sierra_background_choose" = PROC_REF(choose_background))
+
+/// Validate a tree selection before either half is written, using native slot preferences.
+/datum/preference_middleware/sierra_background/proc/choose_background(list/params, mob/user)
+	var/species_type = preferences.read_preference(/datum/preference/choiced/species)
+	if(params["slot"] != preferences.default_slot || params["species"] != get_sierra_background_species(species_type))
+		return FALSE
+	var/preference_key = params["preference"]
+	if(!istext(preference_key))
+		return FALSE
+	var/datum/preference/preference = GLOB.preference_entries_by_key[preference_key]
+	if(!istype(preference, /datum/preference/choiced/sierra_background) && !istype(preference, /datum/preference/choiced/skrell_caste))
+		return FALSE
+	var/value = params["value"]
+	if(!istext(value) || !preference.is_accessible(preferences) || !preference.is_valid(value, preferences))
+		return FALSE
+	if(preference_key != "sierra_faction")
+		if(!isnull(params["subfaction"]))
+			return FALSE
+		return preferences.update_preference(preference, value)
+	var/subfaction = params["subfaction"]
+	if(isnull(subfaction))
+		subfaction = "none"
+	if(!istext(subfaction))
+		return FALSE
+	var/list/choices = get_sierra_background_choices("subfaction", species_type, list("faction" = value))
+	var/datum/preference/choiced/sierra_background/subfaction/subdivision_preference = GLOB.preference_entries[/datum/preference/choiced/sierra_background/subfaction]
+	if(!(subfaction in choices) || !subdivision_preference.is_accessible(preferences))
+		return FALSE
+	if(!preferences.update_preference(preference, value))
+		return FALSE
+	return preferences.update_preference(subdivision_preference, subfaction)
+
+/datum/preference_middleware/sierra_background/proc/choice_details(list/row, datum/species/species_type)
+	var/list/children = list()
+	var/list/effects = list()
+	var/list/catalog = get_sierra_background_catalog()
+	for(var/id in row["choices"])
+		if(row["category"] == "faction")
+			var/list/subdivisions = get_sierra_background_choices("subfaction", species_type, list("faction" = id))
+			subdivisions -= "none"
+			children[id] = subdivisions
+		var/list/resets = preferences.sierra_background_resets(row["preference"], id)
+		var/list/messages = list()
+		for(var/preference_type in resets)
+			var/datum/preference/choiced/sierra_background/preference = GLOB.preference_entries[preference_type]
+			// The tree explicitly selects this child; warn only about other dependent fields.
+			if(preference.background_category == "subfaction")
+				continue
+			var/list/entries = catalog[preference.background_category]
+			var/list/old_entry = entries[preferences.read_preference(preference_type)]
+			var/list/new_entry = entries[resets[preference_type]]
+			messages += "[preference.background_label]: [old_entry?["name"] || "Прежний выбор"] → [new_entry?["name"]]."
+		effects[id] = messages
+	row["choice_effects"] = effects
+	if(row["category"] == "faction")
+		row["choice_children"] = children
 
 /datum/preference_middleware/sierra_background/get_constant_data()
 	var/list/catalog = get_sierra_background_catalog()
@@ -197,7 +285,9 @@
 				continue
 			if(ispath(species_type, /datum/species/skrell))
 				var/value = preferences.read_preference(/datum/preference/choiced/skrell_caste)
-				rows += list(list("category" = "social", "preference" = "skrell_caste", "label" = social_kind["label"], "value" = value, "choices" = choices, "selected_name" = catalog["social"][value]?["name"]))
+				var/list/row = list("category" = "social", "preference" = "skrell_caste", "label" = social_kind["label"], "value" = value, "choices" = choices, "selected_name" = catalog["social"][value]?["name"])
+				choice_details(row, species_type)
+				rows += list(row)
 				continue
 		var/value = preferences.read_preference(preference_type)
 		var/list/entries = catalog[category]
@@ -216,5 +306,6 @@
 		if(category == "culture")
 			row["language_names"] = (value in choices) ? get_sierra_background_language_names(value) : list()
 			row["name_generation"] = get_sierra_background_name_generation_label(preferences)
+		choice_details(row, species_type)
 		rows += list(row)
 	return list("sierra_background" = rows)
