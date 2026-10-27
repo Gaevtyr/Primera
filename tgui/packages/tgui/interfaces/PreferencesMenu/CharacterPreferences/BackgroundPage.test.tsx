@@ -128,16 +128,16 @@ describe('BandaStation character background browser', () => {
     }
   });
 
-  for (const category of ['faction', 'homeworld', 'culture', 'religion']) {
-    it(`previews every ${category} description without saving or showing archival metadata`, () => {
-      const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
-      try {
-        const rows = preferences();
-        const row = rows.find((entry) => entry.category === category)!;
-        setData(rows);
-        render(<TestBackground />);
-        const dialog = open(row);
-        for (const id of row.choices) {
+  for (const { category, choices } of preferences()) {
+    for (const id of choices) {
+      it(`previews ${category}/${id} without saving or showing archival metadata`, () => {
+        const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
+        try {
+          const rows = preferences();
+          const row = rows.find((entry) => entry.category === category)!;
+          setData(rows);
+          render(<TestBackground />);
+          const dialog = open(row);
           const entry = catalog[row.category][id];
           fireEvent.click(
             within(dialog).getByLabelText(`Просмотреть: ${entry.name}`),
@@ -147,13 +147,13 @@ describe('BandaStation character background browser', () => {
           if (entry.extra) {
             expect(dialog.textContent).toContain(plainHtml(entry.extra));
           }
+          fireEvent.click(within(dialog).getByText('Отмена'));
+          expect(sendAct).not.toHaveBeenCalled();
+        } finally {
+          sendAct.mockRestore();
         }
-        fireEvent.click(within(dialog).getByText('Отмена'));
-        expect(sendAct).not.toHaveBeenCalled();
-      } finally {
-        sendAct.mockRestore();
-      }
-    });
+      });
+    }
   }
 
   it('saves only after explicit confirmation and waits for authoritative data', () => {
