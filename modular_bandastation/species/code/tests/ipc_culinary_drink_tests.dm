@@ -211,3 +211,32 @@
 		TEST_ASSERT_EQUAL(human.last_taste_time, original_taste_time, "A rejected delayed spoonful generated flavor feedback.")
 		TEST_ASSERT_EQUAL(human.nutrition, 100, "A rejected delayed spoonful changed battery charge.")
 		TEST_ASSERT_EQUAL(human.reagents.total_volume, 0, "A rejected delayed spoonful introduced chemicals.")
+
+/// The stomach slot can contain ordinary hardware; it must not be treated as a culinary processor.
+/datum/unit_test/ipc_culinary_nonprocessor_stomach/Run()
+	var/mob/living/carbon/human/human = allocate(/mob/living/carbon/human/consistent)
+	human.set_species(/datum/species/ipc)
+	var/obj/item/organ/stomach/cybernetic/stomach = allocate(__IMPLIED_TYPE__)
+	TEST_ASSERT(stomach.Insert(human), "The wrong-stomach fixture could not install ordinary robotic hardware.")
+	TEST_ASSERT_EQUAL(human.get_organ_slot(ORGAN_SLOT_STOMACH), stomach, "The wrong-stomach fixture did not occupy the stomach slot.")
+	human.set_nutrition(100, forced = TRUE)
+	var/original_taste_time = human.last_taste_time
+	var/obj/item/reagent_containers/cup/glass/drinkingglass/cup = allocate(__IMPLIED_TYPE__)
+	cup.reagents.add_reagent(/datum/reagent/water, 10)
+	TEST_ASSERT_EQUAL(cup.try_drink(human, human), ITEM_INTERACT_BLOCKING, "An ordinary stomach was accepted as a drinking processor.")
+	TEST_ASSERT_EQUAL(cup.reagents.total_volume, 10, "Rejected drinking with an ordinary stomach consumed its source.")
+	var/obj/item/reagent_containers/condiment/ketchup/condiment = allocate(__IMPLIED_TYPE__)
+	var/original_condiment_volume = condiment.reagents.total_volume
+	TEST_ASSERT_EQUAL(condiment.try_eat(human, human), ITEM_INTERACT_BLOCKING, "An ordinary stomach was accepted as a condiment processor.")
+	TEST_ASSERT_EQUAL(condiment.reagents.total_volume, original_condiment_volume, "Rejected condiment intake consumed its source.")
+	var/obj/item/kitchen/spoon/spoon = allocate(__IMPLIED_TYPE__)
+	spoon.reagents.add_reagent(/datum/reagent/water, 5)
+	spoon.attack(human, human, list(), list())
+	TEST_ASSERT_EQUAL(spoon.reagents.total_volume, 5, "An ordinary stomach allowed a spoonful to be consumed.")
+	var/obj/item/food/donut/plain/donut = allocate(__IMPLIED_TYPE__)
+	var/original_food_volume = donut.reagents.total_volume
+	var/datum/component/edible/food = donut.GetComponent(__IMPLIED_TYPE__)
+	TEST_ASSERT(!food.TakeBite(human, human), "An ordinary stomach was accepted as a food processor.")
+	TEST_ASSERT_EQUAL(donut.reagents.total_volume, original_food_volume, "Rejected eating with an ordinary stomach consumed its source.")
+	TEST_ASSERT_EQUAL(human.last_taste_time, original_taste_time, "Rejected intake with an ordinary stomach produced taste feedback.")
+	TEST_ASSERT_EQUAL(human.nutrition, 100, "Rejected intake with an ordinary stomach changed electrical charge.")

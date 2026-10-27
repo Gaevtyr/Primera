@@ -184,7 +184,8 @@
 
 /obj/item/organ/stomach/ipc_culinary/on_life(seconds_per_tick)
 	// Never move food chemicals to a synthetic bloodstream or convert nutriment into electrical charge.
-	reagents.clear_reagents()
+	if(length(reagents.reagent_list))
+		reagents.clear_reagents()
 	. = ..()
 	update_taste()
 

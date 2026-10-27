@@ -185,7 +185,7 @@
 	var/mob/living/carbon/as_carbon = eater
 	// BANDASTATION ADDITION START - A culinary processor accepts drinks without weakening chemical immunity or permitting pills.
 	if(HAS_TRAIT(eater, TRAIT_REAGENT_IMMUNE))
-		var/obj/item/organ/stomach/ipc_culinary/culinary = as_carbon.get_organ_by_type(/obj/item/organ/stomach/ipc_culinary)
+		var/obj/item/organ/stomach/ipc_culinary/culinary = astype(as_carbon.get_organ_slot(ORGAN_SLOT_STOMACH), /obj/item/organ/stomach/ipc_culinary)
 		if(!(istype(src, /obj/item/reagent_containers/cup) || istype(src, /obj/item/reagent_containers/condiment)) || !culinary?.is_operational())
 			eater.balloon_alert(user, "невозможно проглотить!")
 			return FALSE

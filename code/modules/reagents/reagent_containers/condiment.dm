@@ -69,7 +69,7 @@
 	// BANDASTATION EDIT START - Culinary processors retain taste and actual consumption without chemical exposure.
 	if(HAS_TRAIT(target, TRAIT_REAGENT_IMMUNE))
 		var/mob/living/carbon/eater = target
-		var/obj/item/organ/stomach/ipc_culinary/culinary = eater.get_organ_by_type(/obj/item/organ/stomach/ipc_culinary)
+		var/obj/item/organ/stomach/ipc_culinary/culinary = astype(eater.get_organ_slot(ORGAN_SLOT_STOMACH), /obj/item/organ/stomach/ipc_culinary)
 		if(!culinary?.consume_flavor(src, 10))
 			return ITEM_INTERACT_BLOCKING
 	else

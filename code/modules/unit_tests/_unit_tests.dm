@@ -124,6 +124,7 @@
 #include "../../../modular_bandastation/species/code/tests/ipc_reagent_effect_tests.dm"
 #include "../../../modular_bandastation/species/code/tests/ipc_reagent_tests.dm"
 #include "../../../modular_bandastation/species/code/tests/ipc_remains_tests.dm"
+#include "../../../modular_bandastation/species/code/tests/ipc_runtime_tests.dm"
 #include "../../../modular_bandastation/species/code/tests/ipc_surgery_tests.dm"
 #include "../../../modular_bandastation/species/code/tests/ipc_tests.dm"
 #include "../../../modular_bandastation/species/code/tests/ipc_ui_tests.dm"

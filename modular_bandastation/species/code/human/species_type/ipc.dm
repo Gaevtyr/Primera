@@ -72,9 +72,9 @@
 	RegisterSignal(human, COMSIG_LIVING_DEATH, PROC_REF(on_status_change))
 	RegisterSignal(human, COMSIG_LIVING_REVIVE, PROC_REF(on_status_change))
 	RegisterSignal(human, COMSIG_CARBON_GAIN_ORGAN, PROC_REF(on_organ_gain))
+	RegisterSignal(human, COMSIG_LIVING_UPDATE_NUTRITION, PROC_REF(update_battery_diagnostic))
 	RegisterSignals(human, list(
 		COMSIG_LIVING_HEALTH_UPDATE,
-		COMSIG_LIVING_UPDATE_NUTRITION,
 		COMSIG_CARBON_LOSE_ORGAN,
 		COMSIG_MOB_STATCHANGE,
 		SIGNAL_ADDTRAIT(TRAIT_KNOCKEDOUT),
@@ -130,7 +130,7 @@
 /// The chassis has no food intake; this also rejects another person's feeding attempt.
 /datum/species/ipc/proc/on_attempt_eat(mob/living/carbon/human/human, atom/food)
 	SIGNAL_HANDLER
-	var/obj/item/organ/stomach/ipc_culinary/culinary = human.get_organ_by_type(/obj/item/organ/stomach/ipc_culinary)
+	var/obj/item/organ/stomach/ipc_culinary/culinary = astype(human.get_organ_slot(ORGAN_SLOT_STOMACH), /obj/item/organ/stomach/ipc_culinary)
 	if(culinary?.is_operational())
 		return NONE
 	human.balloon_alert(human, "КПБ не могут есть!")
@@ -190,6 +190,10 @@
 	SIGNAL_HANDLER
 	human.set_hud_image_state(DIAG_HUD, hud_state = "huddiag[human.stat == DEAD ? "dead" : RoundDiagBar(human.health / human.maxHealth)]")
 	human.set_hud_image_state(DIAG_STAT_HUD, hud_state = human.stat == DEAD ? "huddead2" : (IS_UNCONSCIOUS(human) ? "hudoffline" : "hudstat"))
+	update_battery_diagnostic(human)
+
+/datum/species/ipc/proc/update_battery_diagnostic(mob/living/carbon/human/human)
+	SIGNAL_HANDLER
 	var/obj/item/organ/heart/ipc/battery = human.get_organ_slot(ORGAN_SLOT_HEART)
 	human.set_hud_image_state(DIAG_BATT_HUD, hud_state = istype(battery) ? "hudbatt[RoundDiagBar(human.nutrition / NUTRITION_LEVEL_FULL)]" : "hudnobatt")
 

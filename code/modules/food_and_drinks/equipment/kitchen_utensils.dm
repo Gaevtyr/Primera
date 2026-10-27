@@ -308,7 +308,7 @@
 	// BANDASTATION EDIT START - synthetic food intake must spend a real portion without transferring chemicals
 	if(is_species(target_mob, /datum/species/ipc))
 		var/mob/living/carbon/eater = target_mob
-		var/obj/item/organ/stomach/ipc_culinary/culinary = eater.get_organ_by_type(/obj/item/organ/stomach/ipc_culinary)
+		var/obj/item/organ/stomach/ipc_culinary/culinary = astype(eater.get_organ_slot(ORGAN_SLOT_STOMACH), /obj/item/organ/stomach/ipc_culinary)
 		culinary?.consume_flavor(src, spoon_sip_size)
 	else
 		reagents.trans_to(target_mob, spoon_sip_size, methods = INGEST)

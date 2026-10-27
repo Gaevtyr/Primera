@@ -16,7 +16,8 @@
 /datum/reagents/proc/metabolize(mob/living/carbon/owner, seconds_per_tick, can_overdose = FALSE, liverless = FALSE, dead = FALSE)
 	// BANDASTATION ADDITION START - Safely purge legacy chemicals before any metabolism callbacks.
 	if(is_reagent_immune() || HAS_TRAIT(owner, TRAIT_REAGENT_IMMUNE))
-		clear_reagents()
+		if(length(reagent_list))
+			clear_reagents()
 		return
 	// BANDASTATION ADDITION END
 	var/list/cached_reagents = reagent_list
@@ -100,7 +101,8 @@
 /datum/reagents/proc/metabolize_reagent(mob/living/carbon/owner, datum/reagent/reagent, seconds_per_tick, can_overdose = FALSE, liverless = FALSE, dead = FALSE, list/reagents_metabolized)
 	// BANDASTATION ADDITION START - Direct callers must not start chemical traits or effects either.
 	if(is_reagent_immune() || HAS_TRAIT(owner, TRAIT_REAGENT_IMMUNE))
-		clear_reagents()
+		if(length(reagent_list))
+			clear_reagents()
 		return FALSE
 	// BANDASTATION ADDITION END
 	if(QDELETED(reagent.holder))
@@ -220,7 +222,8 @@
 /datum/reagents/proc/handle_stasis_chems(mob/living/carbon/owner, seconds_per_tick)
 	// BANDASTATION ADDITION START - Stasis bypasses metabolize(), including its legacy cleanup.
 	if(is_reagent_immune() || HAS_TRAIT(owner, TRAIT_REAGENT_IMMUNE))
-		clear_reagents()
+		if(length(reagent_list))
+			clear_reagents()
 		return
 	// BANDASTATION ADDITION END
 	var/need_mob_update = FALSE
