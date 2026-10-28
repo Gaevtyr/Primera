@@ -112,7 +112,7 @@
 	var/obj/item/clothing/underwear/socks/socks = allocate(/obj/item/clothing/underwear/socks)
 	for(var/style_name in SSaccessories.socks_list)
 		var/datum/sprite_accessory/clothing/style = SSaccessories.socks_list[style_name]
-		if(!style.icon_state)
+		if(!style?.icon_state)
 			continue
 		socks.set_style(style, COLOR_WHITE)
 		var/icon/loose = icon(socks.icon, socks.icon_state)
