@@ -7,7 +7,6 @@
 	name = "Дворфийский"
 	desc = "Грубый язык шахтёров и горняков, полный коротких, раскатистых слов."
 	key = "a"
-	speech_verb = "громко говорит"
 	space_chance = 35
 	syllables = list(
 		"etag", "gekur", "tel", "gudos", "geth", "udiz", "zalud", "shoveth", "ver", "zilir",

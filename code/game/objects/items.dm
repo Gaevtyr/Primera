@@ -1228,6 +1228,11 @@ GAME_VERB_SRC(/obj/item, verb_pickup, oview(1), "Pick up", null)
 			if(user.mind.get_skill_level(/datum/skill/mining) >= SKILL_LEVEL_JOURNEYMAN && prob(user.mind.get_skill_modifier(/datum/skill/mining, SKILL_PROBS_MODIFIER))) // we check if the skill level is greater than Journeyman and then we check for the probality for that specific level.
 				mineral_scan_pulse(get_turf(user), SKILL_LEVEL_JOURNEYMAN - 2, scanner = src) //SKILL_LEVEL_JOURNEYMAN = 3 So to get range of 1+ we have to subtract 2 from it,.
 
+	// BANDASTATION ADDITION - Dwarves mine faster with pickaxes and mining drills.
+	// AI EDIT START - Apply the dwarf mining speed bonus to pickaxe-family tools.
+	if(tool_behaviour == TOOL_MINING && HAS_TRAIT(user, TRAIT_DWARF) && istype(src, /obj/item/pickaxe))
+		skill_modifier *= 0.5
+	// AI EDIT END
 	delay *= toolspeed * skill_modifier
 
 
