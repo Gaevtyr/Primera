@@ -93,6 +93,7 @@ GLOBAL_LIST_EMPTY(bug_report_next_submission)
 	return list(
 		"report_details" = report_data,
 		"sending" = sending,
+		"cooldown_minutes" = BUG_REPORT_COOLDOWN / (1 MINUTES),
 		"title_limit" = BUG_REPORT_TITLE_LIMIT,
 		"text_limit" = BUG_REPORT_TEXT_LIMIT,
 		"log_limit" = BUG_REPORT_LOG_LIMIT,
@@ -126,7 +127,7 @@ GLOBAL_LIST_EMPTY(bug_report_next_submission)
 				to_chat(user, span_warning("Заполните все обязательные поля и соблюдайте ограничения длины."))
 				return
 			if(bug_report_cooldown_remaining(author_ckey))
-				to_chat(user, span_warning("Между отправками багрепортов должно пройти 5 минут."))
+				to_chat(user, span_warning("Между отправками багрепортов должно пройти [BUG_REPORT_COOLDOWN / (1 MINUTES)] мин."))
 				return
 			report_data = validated
 			sending = TRUE

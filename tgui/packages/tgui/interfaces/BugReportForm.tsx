@@ -25,6 +25,7 @@ type ReportDetails = {
 type Data = {
   report_details: Partial<ReportDetails>;
   sending: BooleanLike;
+  cooldown_minutes: number;
   title_limit: number;
   text_limit: number;
   log_limit: number;
@@ -33,7 +34,8 @@ type Data = {
 // Adapted from Paradise #30376, using the local TGUI components.
 export function BugReportForm() {
   const { act, data } = useBackend<Data>();
-  const { sending, title_limit, text_limit, log_limit } = data;
+  const { sending, cooldown_minutes, title_limit, text_limit, log_limit } =
+    data;
   const [fields, setFields] = useState<ReportDetails>({
     title: '',
     expected_behavior: '',
@@ -64,7 +66,7 @@ export function BugReportForm() {
       <Window.Content scrollable>
         <NoticeBox info>
           Опишите баг подробно. Отчёт сразу публикуется на GitHub. Между
-          отправками — 5 минут.
+          отправками — {cooldown_minutes} мин.
         </NoticeBox>
         <Section title="Заголовок *">
           <Input

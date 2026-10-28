@@ -18,6 +18,7 @@ function setData(fields = {}, sending = false) {
   store.set(gameDataAtom, {
     report_details: fields,
     sending,
+    cooldown_minutes: 7,
     title_limit: 256,
     text_limit: 4096,
     log_limit: 8192,
@@ -27,10 +28,11 @@ function setData(fields = {}, sending = false) {
 afterEach(resetStore);
 
 describe('BugReportForm', () => {
-  it('blocks incomplete reports', () => {
+  it('uses the server cooldown and blocks incomplete reports', () => {
     const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
     setData();
     render(<BugReportForm />);
+    expect(screen.getByText(/Между отправками — 7 мин\./)).toBeTruthy();
     fireEvent.click(screen.getByText('Опубликовать на GitHub'));
     expect(sendAct).not.toHaveBeenCalled();
     sendAct.mockRestore();
