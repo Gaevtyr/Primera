@@ -107,6 +107,39 @@
 	TEST_ASSERT_EQUAL(garment.loc, wearer.loc, "Underclothing regression.")
 	TEST_ASSERT(!wearer.equip_to_slot_if_possible(garment, ITEM_SLOT_UNDERWEAR, disable_warning = TRUE), "Underclothing regression.")
 
+/// Every sock style must fit inside an inventory frame without losing its pattern.
+/datum/unit_test/underclothing_socks_icon/Run()
+	var/obj/item/clothing/underwear/socks/socks = allocate(/obj/item/clothing/underwear/socks)
+	for(var/style_name in SSaccessories.socks_list)
+		var/datum/sprite_accessory/clothing/style = SSaccessories.socks_list[style_name]
+		if(!style.icon_state)
+			continue
+		socks.set_style(style, COLOR_WHITE)
+		var/icon/loose = icon(socks.icon, socks.icon_state)
+		var/mutable_appearance/worn = style.make_appearance(COLOR_WHITE)
+		var/icon/on_body = icon(worn.icon, worn.icon_state)
+		for(var/direction in GLOB.cardinals)
+			var/list/loose_colors = list()
+			var/list/worn_colors = list()
+			var/min_y = ICON_SIZE_Y
+			var/max_y = 0
+			for(var/x in 1 to ICON_SIZE_X)
+				for(var/y in 1 to ICON_SIZE_Y)
+					var/loose_pixel = loose.GetPixel(x, y, "", direction)
+					if(loose_pixel)
+						loose_colors[loose_pixel] = (loose_colors[loose_pixel] || 0) + 1
+						min_y = min(min_y, y)
+						max_y = max(max_y, y)
+					var/worn_pixel = on_body.GetPixel(x, y, "", direction)
+					if(worn_pixel)
+						worn_colors[worn_pixel] = (worn_colors[worn_pixel] || 0) + 1
+			TEST_ASSERT(length(loose_colors), "[style_name] has no loose-item pixels in [dir2text(direction)].")
+			TEST_ASSERT(min_y > 4 && max_y < ICON_SIZE_Y - 4, "[style_name] overlaps the inventory frame in [dir2text(direction)].")
+			TEST_ASSERT(abs((min_y + max_y) / 2 - (ICON_SIZE_Y + 1) / 2) <= 4, "[style_name] is not centered vertically in [dir2text(direction)].")
+			TEST_ASSERT_EQUAL(length(loose_colors), length(worn_colors), "[style_name] lost pattern colors.")
+			for(var/pixel_color in worn_colors)
+				TEST_ASSERT_EQUAL(loose_colors[pixel_color], worn_colors[pixel_color], "[style_name] lost or recolored pixels in [dir2text(direction)].")
+
 /datum/unit_test/underclothing_hud/Run()
 	var/mob/living/carbon/human/wearer = allocate(/mob/living/carbon/human/consistent, run_loc_floor_bottom_left)
 	var/datum/hud/human/player_hud = allocate(/datum/hud/human, wearer)

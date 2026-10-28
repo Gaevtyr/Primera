@@ -39,6 +39,12 @@
 	var/mutable_appearance/rendered = style.make_appearance(tint)
 	icon = rendered.icon
 	icon_state = rendered.icon_state
+	if(slot_flags == ITEM_SLOT_SOCKS)
+		// Body-aligned socks sit at the feet; center only the loose-item copy.
+		var/icon/centered_socks = icon(icon, icon_state)
+		centered_socks.Shift(NORTH, 12)
+		icon = centered_socks
+		icon_state = ""
 	color = rendered.color
 	update_appearance()
 
