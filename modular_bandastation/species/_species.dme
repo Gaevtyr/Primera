@@ -10,6 +10,10 @@
 #include "code/human/species_type/skrell.dm"
 #include "code/human/species_type/tajaran.dm"
 #include "code/human/species_type/vulpkanin.dm"
+// AI EDIT START - Add the dwarf species and its language to the species modpack.
+#include "code/human/species_type/dwarf.dm"
+#include "code/language/dwarven.dm"
+// AI EDIT END
 
 #include "code/human/sprite_accessories/skrell/skrell_cloth_wrap.dm"
 #include "code/human/sprite_accessories/skrell/skrell_cloth_wrap_toggle.dm"
