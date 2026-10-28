@@ -19,6 +19,7 @@
 #define DWARF_WITHDRAWAL_CRITICAL_STAMINA 80
 #define DWARF_WITHDRAWAL_DANGER_STAMINA 60
 #define DWARF_WITHDRAWAL_WARNING_STAMINA 40
+#define HUD_MOB_DWARF_ALCOHOL "mob_dwarf_alcohol"
 
 /**
  * # Дворф
@@ -63,6 +64,8 @@
 	RegisterSignal(human, COMSIG_LIVING_LIFE, PROC_REF(spec_life))
 	RegisterSignal(human, COMSIG_MOB_MINED, PROC_REF(on_mined))
 	RegisterSignal(human, COMSIG_MOB_REAGENT_TICK, PROC_REF(handle_chemicals))
+	var/atom/movable/screen/dwarf_alcohol/alcohol_display = human.hud_used?.add_screen_object(/atom/movable/screen/dwarf_alcohol, HUD_MOB_DWARF_ALCOHOL, HUD_GROUP_INFO, update_screen = TRUE)
+	alcohol_display?.update_alcohol_bar(dwarf_drunkness, instant = TRUE)
 
 /**
  * Stops dwarf-specific effects when a human changes away from this species.
@@ -74,6 +77,7 @@
  */
 /datum/species/dwarf/on_species_loss(mob/living/carbon/human/human, datum/species/new_species, pref_load)
 	UnregisterSignal(human, list(COMSIG_LIVING_LIFE, COMSIG_MOB_MINED, COMSIG_MOB_REAGENT_TICK))
+	human.hud_used?.remove_screen_object(HUD_MOB_DWARF_ALCOHOL)
 	. = ..()
 
 /// Rewards successful mining with a brief mood boost when using a pickaxe or mining drill.
@@ -93,6 +97,12 @@
 	var/datum/reagent/consumable/ethanol/the_good_stuff = chem
 	var/booze_power = sqrt(the_good_stuff.volume) * the_good_stuff.boozepwr * DWARF_ALCOHOL_RATE
 	dwarf_drunkness = clamp(dwarf_drunkness + booze_power, 0, DWARF_DRUNKNESS_MAX)
+	update_alcohol_hud(source)
+
+/// Refreshes the dwarf's HUD meter after their alcohol level changes.
+/datum/species/dwarf/proc/update_alcohol_hud(mob/living/carbon/human/source)
+	var/atom/movable/screen/dwarf_alcohol/alcohol_display = source.hud_used?.screen_objects[HUD_MOB_DWARF_ALCOHOL]
+	alcohol_display?.update_alcohol_bar(dwarf_drunkness)
 
 /// Sends an alcohol craving message no more often than once every 5 seconds.
 /datum/species/dwarf/proc/notify_alcohol_craving(mob/living/carbon/human/source, message)
@@ -111,6 +121,7 @@
 	if(next_dwarf_drunkness_time <= world.time)
 		dwarf_drunkness = max(dwarf_drunkness - DWARF_DRUNKNESS_DECAY, 0)
 		next_dwarf_drunkness_time = world.time + DWARF_DRUNKNESS_ALERT_TIME + rand(0, DWARF_DRUNKNESS_ALERT_TIME / 2)
+		update_alcohol_hud(source)
 
 	switch(dwarf_drunkness)
 		if(0 to DWARF_DRUNKNESS_CRITICAL_MAX)
@@ -155,6 +166,33 @@
 	description = "Хорошо поработал в шахте."
 	mood_change = 1
 	timeout = 2 MINUTES
+
+/// Displays the dwarf's alcohol level beside their hunger meter.
+/atom/movable/screen/dwarf_alcohol
+	name = "уровень опьянения"
+	icon_state = "hungerbar"
+	screen_loc = ui_hunger
+	pixel_y = ICON_SIZE_Y
+	mouse_opacity = MOUSE_OPACITY_TRANSPARENT
+	VAR_PRIVATE/image/beer_bottle
+	VAR_PRIVATE/atom/movable/screen/hunger_bar/alcohol_bar
+
+/atom/movable/screen/dwarf_alcohol/Initialize(mapload, datum/hud/hud_owner)
+	. = ..()
+	beer_bottle = image(icon = 'icons/obj/drinks/bottles.dmi', icon_state = "beer", pixel_x = -5)
+	beer_bottle.plane = plane
+	beer_bottle.appearance_flags |= KEEP_APART
+	beer_bottle.add_filter("simple_outline", 2, outline_filter(1, COLOR_BLACK, OUTLINE_SHARP))
+	underlays += beer_bottle
+	alcohol_bar = new(src, null)
+	vis_contents += alcohol_bar
+	update_alcohol_bar(DWARF_DRUNKNESS_MAX, instant = TRUE)
+
+/// Updates the fill of the alcohol meter using the same scale as the hunger bar.
+/atom/movable/screen/dwarf_alcohol/proc/update_alcohol_bar(alcohol_level, instant = FALSE)
+	if(!alcohol_bar)
+		return
+	alcohol_bar.update_fullness((alcohol_level / DWARF_DRUNKNESS_MAX) * NUTRITION_LEVEL_FULL, instant)
 
 /**
  * Returns the visible species perks for dwarves.
@@ -204,4 +242,5 @@
 #undef DWARF_WITHDRAWAL_CRITICAL_STAMINA
 #undef DWARF_WITHDRAWAL_DANGER_STAMINA
 #undef DWARF_WITHDRAWAL_WARNING_STAMINA
+#undef HUD_MOB_DWARF_ALCOHOL
 // AI EDIT END
