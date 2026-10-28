@@ -25,7 +25,8 @@
 	if(!preferences || !..())
 		return FALSE
 	var/species_type = preferences.read_preference(/datum/preference/choiced/species)
-	return get_sierra_social_kind(species_type) && !ispath(species_type, /datum/species/skrell)
+	var/list/kind = get_sierra_social_kind(species_type)
+	return kind?["preference"] == savefile_key
 
 /datum/preference/choiced/sierra_background/social/is_valid(value, datum/preferences/preferences)
 	// The native loader visits this dormant preference for species using another key or no social field.

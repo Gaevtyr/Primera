@@ -122,6 +122,11 @@ function BackgroundCategory(props: {
           {preference.invalid_reason ?? subfaction?.invalid_reason}
         </NoticeBox>
       )}
+      {(preference.reset_reason || subfaction?.reset_reason) && (
+        <NoticeBox mt={1}>
+          {preference.reset_reason ?? subfaction?.reset_reason}
+        </NoticeBox>
+      )}
       {preference.category === 'culture' && preference.language_names && (
         <Box color="label" mt={0.5}>
           Языки воспитания:{' '}
@@ -176,27 +181,73 @@ function BackgroundPicker(props: {
 }) {
   const { preference, entries, subfaction, childEntries, close } = props;
   const { act, data } = useBackend<PreferencesMenuData>();
+  const children = preference.choice_children ?? {};
+  const options: { id: string; root: string; path: string[] }[] = [];
+  const addBranch = (id: string, root: string, parents: string[] = []) => {
+    if (parents.includes(id)) {
+      return;
+    }
+    const path = [...parents, id];
+    options.push({ id, root, path });
+    for (const childId of children[id] ?? []) {
+      addBranch(childId, root, path);
+    }
+  };
+  for (const root of preference.choices) {
+    addBranch(root, root);
+  }
   const [query, setQuery] = useState('');
   const [preview, setPreview] = useState(preference.value);
   const [child, setChild] = useState(subfaction?.value ?? 'none');
-  const [expanded, setExpanded] = useState<string[]>([preference.value]);
-  const children = preference.choice_children ?? {};
+  const [expanded, setExpanded] = useState<string[]>(
+    () =>
+      options.find(
+        (option) =>
+          option.root === preference.value && option.id === subfaction?.value,
+      )?.path ?? [preference.value],
+  );
+  const contextChoices = preference.context_choices;
+  const [showOther, setShowOther] = useState(
+    () =>
+      !!contextChoices &&
+      preference.choices.includes(preference.value) &&
+      !contextChoices.includes(preference.value),
+  );
   const hasChild = child !== 'none';
   const entry = hasChild ? childEntries[child] : entries[preview];
-  const valid =
-    preference.choices.includes(preview) &&
-    (!hasChild || !!children[preview]?.includes(child));
+  const draft = options.find(
+    (option) =>
+      option.root === preview && option.id === (hasChild ? child : preview),
+  );
+  const valid = !!draft && (!hasChild || draft.path.length > 1);
   const current =
     preview === preference.value && (!subfaction || child === subfaction.value);
-  const effects = preference.choice_effects?.[preview] ?? [];
+  const effects = preference.choice_effects?.[hasChild ? child : preview] ?? [];
   const search = query.trim().toLocaleLowerCase();
-  const matches = (id: string, source: Record<string, BackgroundEntry>) =>
-    (source[id]?.name ?? id).toLocaleLowerCase().includes(search);
-  const roots = preference.choices.filter(
-    (id) =>
-      matches(id, entries) ||
-      children[id]?.some((childId) => matches(childId, childEntries)),
+  const nameFor = (id: string, root: string) =>
+    (id === root ? entries[id]?.name : childEntries[id]?.name) ?? id;
+  const matches = options.filter((option) =>
+    nameFor(option.id, option.root).toLocaleLowerCase().includes(search),
   );
+  const visibleOptions = options.filter(
+    (option) =>
+      (!contextChoices ||
+        contextChoices.includes(option.root) ||
+        showOther ||
+        option.root === preference.value ||
+        option.root === preview) &&
+      (search
+        ? matches.some(
+            (match) =>
+              option.root === match.root &&
+              (option.path.includes(match.id) ||
+                match.path.includes(option.id)),
+          )
+        : option.path.slice(0, -1).every((id) => expanded.includes(id))),
+  );
+  const hasOther =
+    !!contextChoices &&
+    preference.choices.some((id) => !contextChoices.includes(id));
 
   return (
     <Modal className="BackgroundPicker" onEscape={close}>
@@ -227,6 +278,16 @@ function BackgroundPicker(props: {
               value={query}
               onChange={setQuery}
             />
+            {hasOther && (
+              <Button
+                fluid
+                icon={showOther ? 'chevron-down' : 'chevron-right'}
+                aria-expanded={showOther}
+                onClick={() => setShowOther(!showOther)}
+              >
+                Другая среда / диаспора
+              </Button>
+            )}
             <Box
               className="BackgroundPicker__list"
               data-background-choices={preference.category}
@@ -237,20 +298,24 @@ function BackgroundPicker(props: {
                     'Нет доступных вариантов для текущих настроек персонажа.'}
                 </NoticeBox>
               )}
-              {!!preference.choices.length && !roots.length && (
+              {!!preference.choices.length && !visibleOptions.length && (
                 <Box color="label">Ничего не найдено.</Box>
               )}
-              {roots.map((id) => {
+              {visibleOptions.map(({ id, root, path }) => {
                 const childIds = children[id] ?? [];
                 const opened = expanded.includes(id) || !!search;
                 return (
-                  <Box key={id} mb={0.25}>
+                  <Box
+                    key={path.join('/')}
+                    mb={0.25}
+                    ml={(path.length - 1) * 1.5}
+                  >
                     <Box className="BackgroundPicker__branch">
                       {!!childIds.length && (
                         <Button
                           color="transparent"
                           icon={opened ? 'chevron-down' : 'chevron-right'}
-                          aria-label={`Подразделения: ${entries[id]?.name ?? id}`}
+                          aria-label={`Подразделения: ${nameFor(id, root)}`}
                           aria-expanded={opened}
                           onClick={() =>
                             setExpanded(
@@ -264,52 +329,27 @@ function BackgroundPicker(props: {
                       <Button
                         fluid
                         className="BackgroundPicker__option"
-                        selected={preview === id && !hasChild}
+                        selected={
+                          preview === root &&
+                          (hasChild ? child === id : id === root)
+                        }
                         icon={
-                          preference.value === id &&
-                          (!subfaction || subfaction.value === 'none')
+                          preference.value === root &&
+                          (subfaction && subfaction.value !== 'none'
+                            ? subfaction.value === id
+                            : id === root)
                             ? 'check'
                             : undefined
                         }
-                        aria-label={`Просмотреть: ${entries[id]?.name ?? id}`}
+                        aria-label={`Просмотреть: ${nameFor(id, root)}`}
                         onClick={() => {
-                          setPreview(id);
-                          setChild('none');
+                          setPreview(root);
+                          setChild(id === root ? 'none' : id);
                         }}
                       >
-                        {entries[id]?.name ?? id}
+                        {nameFor(id, root)}
                       </Button>
                     </Box>
-                    {opened &&
-                      childIds
-                        .filter(
-                          (childId) =>
-                            !search ||
-                            matches(id, entries) ||
-                            matches(childId, childEntries),
-                        )
-                        .map((childId) => (
-                          <Box key={childId} ml={1.5} mt={0.25}>
-                            <Button
-                              fluid
-                              className="BackgroundPicker__option"
-                              selected={preview === id && child === childId}
-                              icon={
-                                preference.value === id &&
-                                subfaction?.value === childId
-                                  ? 'check'
-                                  : undefined
-                              }
-                              aria-label={`Просмотреть: ${childEntries[childId]?.name ?? childId}`}
-                              onClick={() => {
-                                setPreview(id);
-                                setChild(childId);
-                              }}
-                            >
-                              {childEntries[childId]?.name ?? childId}
-                            </Button>
-                          </Box>
-                        ))}
                   </Box>
                 );
               })}
@@ -318,7 +358,9 @@ function BackgroundPicker(props: {
           <Box className="BackgroundPicker__description">
             {hasChild && (
               <Box color="label" mb={0.5}>
-                {entries[preview]?.name ?? preview}
+                {(draft?.path.slice(0, -1) ?? [preview])
+                  .map((id) => nameFor(id, preview))
+                  .join(' → ')}
               </Box>
             )}
             <Box bold fontSize="1.25em" mb={1}>
@@ -436,8 +478,9 @@ function PrivateAntagonist(props: { profile: AntagonistBackground }) {
       }
     >
       <Box color="label">
-        Необязательно. Эта предыстория видна только вам и не влияет на получение
-        роли.
+        Необязательно. После получения роли предателя заметка видна только вам в
+        его личном окне, отдельно от назначения. Она не влияет на получение роли
+        или выбор нанимателя.
       </Box>
       {expanded && (
         <Box mt={1}>

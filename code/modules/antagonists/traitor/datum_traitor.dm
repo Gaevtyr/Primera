@@ -230,8 +230,8 @@
 	data["theme"] = traitor_flavor["ui_theme"]
 	data["code"] = uplink?.unlock_code
 	data["failsafe_code"] = uplink?.failsafe_code
-	// BANDASTATION EDIT - Private compatible biography changes only the owner's displayed introduction.
-	data["intro"] = get_sierra_antagonist_intro(user, traitor_flavor["introduction"])
+	data["intro"] = traitor_flavor["introduction"]
+	data["personal_background"] = get_sierra_antagonist_background(user) // BANDASTATION ADDITION - Private character biography, separate from the assigned employer.
 	data["allies"] = traitor_flavor["allies"]
 	data["goal"] = traitor_flavor["goal"]
 	data["has_uplink"] = uplink ? TRUE : FALSE

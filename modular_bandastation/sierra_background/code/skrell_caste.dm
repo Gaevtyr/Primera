@@ -38,7 +38,8 @@
 /datum/preference/choiced/skrell_caste/is_accessible(datum/preferences/preferences)
 	if(!preferences || !..())
 		return FALSE
-	return ispath(preferences.read_preference(/datum/preference/choiced/species), /datum/species/skrell)
+	var/list/kind = get_sierra_social_kind(preferences.read_preference(/datum/preference/choiced/species))
+	return kind?["preference"] == savefile_key
 
 /datum/preference/choiced/skrell_caste/compile_constant_data()
 	var/list/data = ..()

@@ -73,7 +73,12 @@
 	maximum_value_length = 1001
 
 /datum/preference/text/sierra_antagonist_notes/deserialize(input, datum/preferences/preferences)
-	return istext(input) ? STRIP_HTML_FULL(input, maximum_value_length) : ""
+	if(!istext(input))
+		return ""
+	var/static/regex/control_characters = regex(@"[\x00-\x08\x0B-\x1F\x7F]", "g")
+	var/carriage_return = ascii2text(13)
+	input = replacetext(replacetext(input, "[carriage_return]\n", "\n"), carriage_return, "\n")
+	return STRIP_HTML_FULL(control_characters.Replace(input, ""), maximum_value_length)
 
 /datum/preference/text/sierra_antagonist_notes/is_valid(value, datum/preferences/preferences)
 	return istext(value) && length_char(value) < maximum_value_length
@@ -121,7 +126,7 @@
 		"preference" = notes.savefile_key,
 		"value" = read_preference(notes.type),
 		"max_length" = notes.maximum_value_length - 1,
-		"prompt" = "Как персонаж связан с выбранной организацией? Эта предыстория используется только для подходящей антагонистической роли.",
+		"prompt" = "Как персонаж связан с выбранной организацией? Заметка видна только вам в личном окне предателя после получения роли и не определяет назначенного нанимателя.",
 	)
 	return result
 
@@ -159,26 +164,23 @@
 		"notes" = preferences.read_preference(/datum/preference/text/sierra_antagonist_notes),
 	)
 
-/// This is a display-only addition. The native employer and introduction remain authoritative.
-/datum/antagonist/traitor/proc/get_sierra_antagonist_intro(mob/user, standard_intro)
+/// The biography stays separate from this round's employer, including a conflicting past affiliation.
+/datum/antagonist/traitor/proc/get_sierra_antagonist_background(mob/user)
 	if(!owner || user != owner.current || user?.mind != owner || !(src in owner.antag_datums))
-		return standard_intro
+		return null
 	var/list/background = owner.sierra_antagonist_background
 	var/notes = background?["notes"]
 	if(!istext(notes) || !length(trimtext(notes)))
-		return standard_intro
+		return null
 	var/list/catalog = get_sierra_antagonist_catalog()
 	var/list/organizations = catalog["organizations"]
 	var/organization_id = background["organization"]
 	var/list/organization = organizations[organization_id]
-	var/list/compatible_employers = organization?["native_employers"]
-	if(organization_id == "none" || !(employer in compatible_employers))
-		return standard_intro
 	var/subgroup_id = background["subgroup"]
-	if(subgroup_id != "none")
-		var/list/subgroups = catalog["subgroups"]
-		var/list/subgroup = subgroups[subgroup_id]
-		var/list/subgroup_employers = subgroup?["native_employers"]
-		if(subgroup?["parent_faction"] != organization_id || !(employer in subgroup_employers))
-			return standard_intro
-	return "[standard_intro]\n\nЛичная предыстория персонажа: [notes]"
+	var/list/subgroups = catalog["subgroups"]
+	var/list/subgroup = subgroups[subgroup_id]
+	return list(
+		"organization" = organization_id != "none" ? organization?["name"] : null,
+		"subgroup" = subgroup?["parent_faction"] == organization_id ? subgroup?["name"] : null,
+		"notes" = notes,
+	)

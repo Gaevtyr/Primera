@@ -245,6 +245,7 @@ export type BackgroundPreference = {
   label: string;
   value: string;
   choices: string[];
+  context_choices?: string[];
   choice_children?: Record<string, string[]>;
   choice_effects?: Record<string, string[]>;
   notes?: string;
@@ -252,6 +253,7 @@ export type BackgroundPreference = {
   notes_max_length?: number;
   notes_prompt?: string;
   invalid_reason?: string;
+  reset_reason?: string;
   selected_name?: string;
   empty_reason?: string;
   language_names?: string[];

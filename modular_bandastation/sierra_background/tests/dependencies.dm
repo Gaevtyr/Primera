@@ -115,19 +115,22 @@
 		"TF_LibertyDemocracy" = "TSF", "TF_ProgressiveCitizens" = "TSF", "TF_EnterpriseTrade" = "TSF",
 		"SK_Imperialists" = "Imperium", "SK_Reactionaries" = "Imperium", "SK_Reformers" = "Imperium",
 		"CU_Siberists" = "CUSP", "CU_Zimovists" = "CUSP",
-		"KidanRepublic" = "Free", "Adomai" = "Free",
+		"Seekers" = "Free", "FreeCartel" = "Free", "OrdoLex" = "Free",
+		"SeekersWings" = "Seekers", "SeekersClaws" = "Seekers", "SeekersTails" = "Seekers",
 		"ElysiumSmallLight" = "Elysium", "ElysiumGreenExpansion" = "Elysium",
 		"GalAndSons" = "Nanotrasen", "NanoFax" = "Nanotrasen", "SecTech" = "Nanotrasen",
 		"NTAmmunition" = "Nanotrasen", "NTSC" = "Nanotrasen", "NanoStream" = "Nanotrasen",
 		"ExagonIchiwaka" = "FreeCartel", "WitherVit" = "FreeCartel", "HumanRealm" = "FreeCartel",
 	)
 	var/list/main_choices = get_sierra_background_choices("faction", /datum/species/human)
-	for(var/id in list("TSF", "CUSP", "Nanotrasen", "Elysium", "FreeCartel", "OrdoLex", "KanashiTech", "none"))
+	for(var/id in list("TSF", "CUSP", "Nanotrasen", "Elysium", "Free", "Adomai", "KidanRepublic", "KanashiTech", "none"))
 		TEST_ASSERT(id in main_choices, "Independent affiliation [id] disappeared from the main level.")
 	for(var/id in parents)
 		var/parent = parents[id]
+		var/list/path = get_sierra_faction_path(id)
+		TEST_ASSERT_EQUAL(path[length(path) - 1], parent, "[id] lost its documented immediate parent.")
 		TEST_ASSERT(!(id in main_choices), "Subdivision [id] is still offered as a main affiliation.")
-		var/list/own_choices = get_sierra_background_choices("subfaction", /datum/species/human, list("faction" = parent))
+		var/list/own_choices = get_sierra_background_choices("subfaction", /datum/species/human, list("faction" = path[1]))
 		TEST_ASSERT(id in own_choices, "[id] is missing under its documented parent [parent].")
 		TEST_ASSERT("none" in own_choices, "Selecting [parent] requires membership of a subdivision.")
 		var/other_parent = parent == "TSF" ? "Nanotrasen" : "TSF"
@@ -289,7 +292,7 @@
 		TEST_ASSERT(row["value"] in row["choices"], "A stale subdivision escaped synchronous reconciliation.")
 	TEST_ASSERT(!preferences.update_preference(GLOB.preference_entries[/datum/preference/choiced/sierra_background/subfaction], "NTSC"), "A direct forged update bypassed parent validation.")
 
-/// Passive reads and ordinary saves preserve an old invalid biography and display a warning.
+/// Unknown and retired IDs stay visible for repair without deleting personal biography text.
 /datum/unit_test/sierra_background_dependency_legacy_slots
 	parent_type = /datum/unit_test/sierra_background_fixture
 
@@ -301,7 +304,7 @@
 	save_data["species"] = "skrell"
 	save_data["real_name"] = "Legacy Tester"
 	save_data["age"] = 40
-	var/list/legacy_values = list("faction" = "Elysium", "subfaction" = "ElysiumSmallLight", "homeworld" = "Athena", "culture" = "earth_upbringing", "religion" = "Christianity")
+	var/list/legacy_values = list("faction" = "retired-affiliation", "subfaction" = "retired-subdivision", "homeworld" = "Athena", "culture" = "retired-upbringing", "religion" = "Christianity")
 	for(var/category in legacy_values)
 		save_data["sierra_[category]"] = legacy_values[category]
 	var/list/notes = notes_types()
@@ -439,7 +442,7 @@
 	parent_type = /datum/unit_test/sierra_background_fixture
 
 /datum/unit_test/sierra_background_dependency_flat_faction_migration/Run()
-	var/list/fixtures = list("TF_LibertyDemocracy" = "TSF", "ElysiumSmallLight" = "Elysium", "NanoFax" = "Nanotrasen", "WitherVit" = "FreeCartel")
+	var/list/fixtures = list("TF_LibertyDemocracy" = "TSF", "ElysiumSmallLight" = "Elysium", "NanoFax" = "Nanotrasen", "WitherVit" = "Free")
 	for(var/child in fixtures)
 		var/datum/client_interface/mock_client = allocate(/datum/client_interface)
 		var/datum/preferences/preferences = make_preferences(mock_client)

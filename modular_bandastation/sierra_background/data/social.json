@@ -1,23 +1,27 @@
 {
   "source": {
     "description": "Только названия и тексты из подтверждённых источников; перечень кланов и домов не исчерпывающий. Никаких профессиональных ограничений.",
-    "reviewed_on": "2026-10-26"
+    "reviewed_on": "2026-10-28"
   },
   "species": {
     "skrell": {
       "label": "Каста",
+      "preference": "skrell_caste",
       "can_omit": false
     },
     "vulpkanin": {
       "label": "Клан",
+      "preference": "sierra_social",
       "can_omit": true
     },
     "lizard": {
       "label": "Клан",
+      "preference": "sierra_social",
       "can_omit": true
     },
     "tajaran": {
       "label": "Дом",
+      "preference": "sierra_social",
       "can_omit": true
     }
   },
@@ -35,6 +39,39 @@
       "source_refs": [
         "https://docs.google.com/document/d/1Yp6SsxMpc8sGhr6ztFQgbtQNwbHvRQY-zxxjiblr4zM/edit"
       ]
+    },
+    "vulp_rakh": {
+      "name": "Рахт",
+      "description": "Клан ценит науку, философию, медитацию и единение с природой; его представители стремятся объединить Альтам политическим путём. В общении приняты сдержанность и убеждение соперника в правоте своих идеалов.",
+      "allowed_species": [
+        "vulpkanin"
+      ],
+      "source_refs": [
+        "https://bs.ss220.club/index.php/Вульпканин#Рекомендации_по_отыгрышу_кланов"
+      ],
+      "author_decision": "2026-10-28: автор одобрил добавление клана и уточнил название: «Рахт»."
+    },
+    "vulp_mzmanulin": {
+      "name": "Догмат Мзманулина",
+      "description": "Клан связывает справедливость с порядком, дисциплиной и силой. Его представители сдержанны, стойки и готовы защищать своих; общую принадлежность подчёркивают военной одеждой, братством и стихами о доме и войне.",
+      "allowed_species": [
+        "vulpkanin"
+      ],
+      "source_refs": [
+        "https://bs.ss220.club/index.php/Вульпканин#Рекомендации_по_отыгрышу_кланов"
+      ]
+    },
+    "vulp_refugee": {
+      "name": "Беженец",
+      "description": "Общинная принадлежность вульпканинов, покинувших воюющий Альтам, и их потомков. В этих общинах ценят взаимопомощь, щедрость, гостеприимство и мирную жизнь. Связь с родиной может сохраняться вместе с тяжёлой памятью о войне. Выбор обозначает общину беженцев, а членство в одном из кланов остаётся неуказанным.",
+      "allowed_species": [
+        "vulpkanin"
+      ],
+      "source_refs": [
+        "https://bs.ss220.club/index.php/Вульпканин#Рекомендации_по_отыгрышу_кланов",
+        "https://github.com/SpaceStation220/Primera/blob/3676661f168e19a5eec240210ca8f7e4fc8dcfa3/modular_bandastation/species/code/human/species_type/vulpkanin.dm"
+      ],
+      "author_decision": "2026-10-28: автор одобрил отдельный вариант «Беженец» в расовой социальной принадлежности."
     },
     "unathi_zessur": {
       "name": "Зессур",

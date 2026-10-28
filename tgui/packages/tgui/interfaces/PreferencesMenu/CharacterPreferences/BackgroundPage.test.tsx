@@ -250,7 +250,7 @@ describe('BandaStation character background browser', () => {
       const row = preferences()[0];
       row.choices = ['none', 'Nanotrasen'];
       row.choice_children = { Nanotrasen: ['SecTech'] };
-      row.choice_effects = { Nanotrasen: ['Место жительства будет сброшено.'] };
+      row.choice_effects = { SecTech: ['Место жительства будет сброшено.'] };
       const subfaction: BackgroundPreference = {
         category: 'subfaction',
         preference: 'sierra_subfaction',
@@ -342,6 +342,260 @@ describe('BandaStation character background browser', () => {
     } finally {
       sendAct.mockRestore();
     }
+  });
+
+  for (const selected of ['FreeCartel', 'WitherVit']) {
+    it(`saves the root and selected node of a three-level faction tree: ${selected}`, () => {
+      const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
+      try {
+        const row = preferences()[0];
+        row.choices = ['none', 'Free', 'Nanotrasen'];
+        row.choice_children = {
+          Free: ['Seekers', 'FreeCartel', 'OrdoLex'],
+          FreeCartel: ['ExagonIchiwaka', 'WitherVit', 'HumanRealm'],
+          Seekers: ['SeekersWings', 'SeekersClaws', 'SeekersTails'],
+          Nanotrasen: ['SecTech'],
+        };
+        row.choice_effects = {
+          Free: ['Эффект родителя'],
+          [selected]: ['Эффект выбранного объединения'],
+        };
+        const subgroup: BackgroundPreference = {
+          category: 'subfaction',
+          preference: 'sierra_subfaction',
+          label: 'Подразделение',
+          value: 'none',
+          choices: ['none'],
+        };
+        setData([row, subgroup]);
+        render(<TestBackground />);
+        open(row);
+        fireEvent.click(
+          screen.getByLabelText(`Подразделения: ${catalog.faction.Free.name}`),
+        );
+        fireEvent.click(
+          screen.getByLabelText(
+            `Подразделения: ${catalog.subfaction.FreeCartel.name}`,
+          ),
+        );
+        browse('subfaction', selected);
+        const description = screen
+          .getByRole('dialog')
+          .querySelector('.BackgroundPicker__description')!;
+        expect(description.textContent).toContain(
+          plainHtml(catalog.subfaction[selected].description),
+        );
+        expect(description.textContent).toContain(
+          selected === 'WitherVit'
+            ? `${catalog.faction.Free.name} → ${catalog.subfaction.FreeCartel.name}`
+            : catalog.faction.Free.name,
+        );
+        expect(description.textContent).toContain(
+          'Эффект выбранного объединения',
+        );
+        expect(description.textContent).not.toContain('Эффект родителя');
+        expect(sendAct).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByText('Выбрать'));
+        expect(sendAct).toHaveBeenLastCalledWith('sierra_background_choose', {
+          preference: row.preference,
+          value: 'Free',
+          subfaction: selected,
+          slot: 1,
+          species: 'human',
+        });
+      } finally {
+        sendAct.mockRestore();
+      }
+    });
+  }
+
+  it('opens the full saved path and finds deep branches without unrelated siblings', () => {
+    const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
+    try {
+      const row = preferences()[0];
+      row.value = 'Free';
+      row.choices = ['none', 'Free'];
+      row.choice_children = {
+        Free: ['FreeCartel', 'Seekers', 'OrdoLex'],
+        FreeCartel: ['WitherVit'],
+        Seekers: ['SeekersWings', 'SeekersTails'],
+      };
+      const subgroup: BackgroundPreference = {
+        category: 'subfaction',
+        preference: 'sierra_subfaction',
+        label: 'Подразделение',
+        value: 'WitherVit',
+        choices: ['none', 'WitherVit'],
+      };
+      setData([row, subgroup]);
+      render(<TestBackground />);
+      open(row);
+      for (const id of ['Free', 'FreeCartel']) {
+        expect(
+          screen
+            .getByLabelText(`Подразделения: ${catalog.faction[id].name}`)
+            .getAttribute('aria-expanded'),
+        ).toBe('true');
+      }
+      expect(
+        screen.getByLabelText(
+          `Просмотреть: ${catalog.subfaction.WitherVit.name}`,
+        ),
+      ).toBeDefined();
+      fireEvent.change(screen.getByLabelText('Поиск вариантов'), {
+        target: { value: catalog.subfaction.SeekersWings.name },
+      });
+      for (const id of ['Free', 'Seekers', 'SeekersWings']) {
+        expect(
+          screen.getByLabelText(`Просмотреть: ${catalog.faction[id].name}`),
+        ).toBeDefined();
+      }
+      for (const id of ['FreeCartel', 'WitherVit', 'SeekersTails', 'OrdoLex']) {
+        expect(
+          screen.queryByLabelText(
+            `Просмотреть: ${catalog.subfaction[id].name}`,
+          ),
+        ).toBeNull();
+      }
+      browse('subfaction', 'SeekersWings');
+      fireEvent.click(screen.getByText('Отмена'));
+      expect(sendAct).not.toHaveBeenCalled();
+      expect(sectionFor('faction').textContent).toContain(
+        catalog.subfaction.WitherVit.name,
+      );
+    } finally {
+      sendAct.mockRestore();
+    }
+  });
+
+  it('rejects a deep draft when the server removes its ancestry while open', () => {
+    const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
+    try {
+      const row = preferences()[0];
+      row.choices = ['none', 'Free'];
+      row.choice_children = {
+        Free: ['FreeCartel'],
+        FreeCartel: ['WitherVit'],
+      };
+      setData([row]);
+      const view = render(<TestBackground />);
+      open(row);
+      fireEvent.change(screen.getByLabelText('Поиск вариантов'), {
+        target: { value: catalog.subfaction.WitherVit.name },
+      });
+      browse('subfaction', 'WitherVit');
+      row.choice_children.Free = [];
+      setData([row]);
+      view.rerender(<TestBackground />);
+      expect(
+        screen.getByText(
+          'Этот вариант недоступен для текущей анкеты. Выберите другой.',
+        ),
+      ).toBeDefined();
+      fireEvent.click(screen.getByText('Выбрать'));
+      expect(sendAct).not.toHaveBeenCalled();
+    } finally {
+      sendAct.mockRestore();
+    }
+  });
+
+  for (const [category, primary, diaspora, restricted] of [
+    ['homeworld', 'Boron', 'Moges', 'Earth'],
+    ['culture', 'skrell_imperial', 'kssp', 'elysian'],
+  ] as const) {
+    it(`offers contextual ${category} first and only server-valid diaspora on request`, () => {
+      const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
+      try {
+        const row = preferences().find((row) => row.category === category)!;
+        row.value = primary;
+        row.choices = [primary, diaspora, 'other'];
+        row.context_choices = [primary, 'other', restricted];
+        setData([row], 1, 'skrell');
+        render(<TestBackground />);
+        open(row);
+        expect(
+          screen.getByLabelText(
+            `Просмотреть: ${catalog[category][primary].name}`,
+          ),
+        ).toBeDefined();
+        expect(
+          screen.queryByLabelText(
+            `Просмотреть: ${catalog[category][diaspora].name}`,
+          ),
+        ).toBeNull();
+        fireEvent.click(screen.getByText('Другая среда / диаспора'));
+        expect(
+          screen.queryByLabelText(
+            `Просмотреть: ${catalog[category][restricted].name}`,
+          ),
+        ).toBeNull();
+        browse(category, diaspora);
+        fireEvent.click(screen.getByText('Выбрать'));
+        expect(sendAct).toHaveBeenLastCalledWith('sierra_background_choose', {
+          preference: row.preference,
+          value: diaspora,
+          slot: 1,
+          species: 'skrell',
+        });
+      } finally {
+        sendAct.mockRestore();
+      }
+    });
+  }
+
+  it('keeps a saved diaspora visible and refreshes the contextual pool while browsing', () => {
+    const row = preferences()[1];
+    row.value = 'Boron';
+    row.choices = ['Earth', 'Boron', 'Moges', 'other'];
+    row.context_choices = ['Earth', 'other'];
+    setData([row]);
+    const view = render(<TestBackground />);
+    open(row);
+    expect(
+      screen
+        .getByText('Другая среда / диаспора')
+        .closest('.Button')
+        ?.getAttribute('aria-expanded'),
+    ).toBe('true');
+    fireEvent.click(screen.getByText('Другая среда / диаспора'));
+    expect(
+      screen.getByLabelText(`Просмотреть: ${catalog.homeworld.Boron.name}`),
+    ).toBeDefined();
+    expect(
+      screen.queryByLabelText(`Просмотреть: ${catalog.homeworld.Moges.name}`),
+    ).toBeNull();
+    row.context_choices = ['Moges', 'other'];
+    setData([row]);
+    view.rerender(<TestBackground />);
+    expect(
+      screen.getByLabelText(`Просмотреть: ${catalog.homeworld.Moges.name}`),
+    ).toBeDefined();
+    expect(
+      screen.queryByLabelText(`Просмотреть: ${catalog.homeworld.Earth.name}`),
+    ).toBeNull();
+    expect(
+      screen.getByLabelText(`Просмотреть: ${catalog.homeworld.Boron.name}`),
+    ).toBeDefined();
+  });
+
+  it('reports an incompatible saved value cleared on load without marking the neutral choice invalid', () => {
+    const row = preferences()[1];
+    row.value = 'other';
+    row.reset_reason =
+      'Сохранённый вариант несовместим с видом и очищен; личный текст сохранён.';
+    setData([row]);
+    render(<TestBackground />);
+    expect(screen.getByText(row.reset_reason)).toBeDefined();
+    expect(
+      screen.queryByText(/Сохранённый выбор требует исправления/),
+    ).toBeNull();
+    open(row);
+    expect(screen.getByText('Выбрано')).toBeDefined();
+    expect(
+      screen.queryByText(
+        'Этот вариант недоступен для текущей анкеты. Выберите другой.',
+      ),
+    ).toBeNull();
   });
 
   it('keeps optional personal notes collapsed and saves plain text on blur', () => {

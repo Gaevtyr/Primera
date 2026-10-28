@@ -41,6 +41,7 @@
 	TEST_ASSERT(notes.is_valid(full_text), "A thousand Cyrillic characters were rejected by byte length.")
 	TEST_ASSERT_EQUAL(notes.deserialize("[full_text]Лишнее", preferences), full_text, "Private notes were not truncated at the character limit.")
 	TEST_ASSERT_EQUAL(notes.deserialize(list("forged"), preferences), "", "Malformed private notes did not recover safely.")
+	TEST_ASSERT_EQUAL(notes.deserialize("Строка[ascii2text(13)]\n[ascii2text(7)][ascii2text(27)]Текст\t[ascii2text(127)]", preferences), "Строка\nТекст\t", "Private notes retained control characters or lost supported whitespace.")
 	var/mob/living/carbon/human/body = allocate(/mob/living/carbon/human/consistent)
 	var/old_features = json_encode(body.dna.features)
 	for(var/datum/preference/preference as anything in list(faction, subfaction, notes))
@@ -131,7 +132,7 @@
 	TEST_ASSERT_EQUAL(character.sierra_antagonist_background["organization"], "Donk", "Later profile selection changed the spawned character's snapshot.")
 	TEST_ASSERT_EQUAL(character.sierra_antagonist_background["notes"], "Биография профиля для профессии.", "Later profile selection replaced the spawned character's private notes.")
 
-/// A late or repeated role reads only its character snapshot; only compatible owner UI may show it.
+/// The owner's late or repeated role shows the saved biography separately from the real assignment.
 /datum/unit_test/sierra_background_antagonist_display
 	parent_type = /datum/unit_test/sierra_background_fixture
 	var/datum/mind/display_character
@@ -148,13 +149,17 @@
 	return ..()
 
 /datum/unit_test/sierra_background_antagonist_display/Run()
-	var/datum/preferences/preferences = make_preferences()
+	var/datum/client_interface/mock_client = allocate(/datum/client_interface)
+	var/datum/preferences/preferences = make_preferences(mock_client)
 	var/datum/preference/faction = GLOB.preference_entries[/datum/preference/choiced/sierra_antagonist/faction]
 	var/datum/preference/subfaction = GLOB.preference_entries[/datum/preference/choiced/sierra_antagonist/subfaction]
 	var/datum/preference/notes = GLOB.preference_entries[/datum/preference/text/sierra_antagonist_notes]
 	TEST_ASSERT(preferences.update_preference(faction, "Cybersun"), "Could not prepare the biography organization.")
 	TEST_ASSERT(preferences.update_preference(subfaction, "Gorlex"), "Could not prepare the biography subgroup.")
 	TEST_ASSERT(preferences.update_preference(notes, "PRIVATE_SENTINEL: прежняя служба."), "Could not prepare private text.")
+	TEST_ASSERT(preferences.save_character(), "Could not save the biography before a new login.")
+	TEST_ASSERT(preferences.save_preferences(), "Could not flush the biography before a new login.")
+	var/datum/preferences/reloaded = make_preferences(mock_client)
 	var/mob/living/carbon/human/body = allocate(/mob/living/carbon/human/consistent)
 	var/mob/living/carbon/human/other_player = allocate(/mob/living/carbon/human/consistent)
 	var/mob/dead/observer/observer = allocate(/mob/dead/observer)
@@ -162,11 +167,12 @@
 	character.set_current(body)
 	display_character = character
 	body.mind = character
-	character.capture_sierra_antagonist_background(preferences)
+	character.capture_sierra_antagonist_background(reloaded)
 	// The role is added after capture, as with an activated sleeper agent.
 	var/datum/antagonist/traitor/traitor = allocate(/datum/antagonist/traitor)
 	display_traitor = traitor
 	traitor.owner = character
+	TEST_ASSERT_NULL(traitor.get_sierra_antagonist_background(body), "A character without the role received its private antagonist biography.")
 	character.antag_datums = list(traitor)
 	traitor.employer = "Gorlex Marauders"
 	traitor.pick_employer()
@@ -174,11 +180,18 @@
 	var/original_flavor = json_encode(traitor.traitor_flavor)
 	var/list/original_objectives = traitor.objectives.Copy()
 	var/list/private_data = traitor.ui_static_data(body)
-	TEST_ASSERT(findtext(private_data["intro"], "PRIVATE_SENTINEL"), "A matching late role did not show its owner's biography.")
-	TEST_ASSERT(findtext(private_data["intro"], standard_intro), "The biography replaced the authoritative employer statement.")
-	TEST_ASSERT_EQUAL(traitor.get_sierra_antagonist_intro(other_player, standard_intro), standard_intro, "Another player received private text.")
-	TEST_ASSERT_EQUAL(traitor.get_sierra_antagonist_intro(observer, standard_intro), standard_intro, "An observer received private text.")
-	TEST_ASSERT_EQUAL(traitor.get_sierra_antagonist_intro(null, standard_intro), standard_intro, "An unauthenticated request received private text.")
+	var/list/biography = private_data["personal_background"]
+	TEST_ASSERT_EQUAL(biography?["notes"], "PRIVATE_SENTINEL: прежняя служба.", "A saved and reloaded late role did not show its owner's exact biography.")
+	TEST_ASSERT_EQUAL(biography?["organization"], "Cybersun Industries", "The biography lost its saved organization label.")
+	TEST_ASSERT_EQUAL(biography?["subgroup"], "Gorlex Marauders", "The biography lost its saved subgroup label.")
+	TEST_ASSERT_EQUAL(private_data["intro"], standard_intro, "The biography changed the authoritative employer statement.")
+	var/list/reopened_data = traitor.ui_static_data(body)
+	TEST_ASSERT_EQUAL(json_encode(reopened_data["personal_background"]), json_encode(biography), "Reopening the role window lost the biography.")
+	TEST_ASSERT_NULL(traitor.get_sierra_antagonist_background(other_player), "Another player received private text.")
+	TEST_ASSERT_NULL(traitor.get_sierra_antagonist_background(observer), "An observer received private text.")
+	TEST_ASSERT_NULL(traitor.get_sierra_antagonist_background(null), "An unauthenticated request received private text.")
+	var/list/foreign_data = traitor.ui_static_data(other_player)
+	TEST_ASSERT_NULL(foreign_data["personal_background"], "The real role UI exported private notes to another player.")
 	TEST_ASSERT_EQUAL(traitor.employer, "Gorlex Marauders", "The biography changed the assigned employer.")
 	TEST_ASSERT_EQUAL(json_encode(traitor.traitor_flavor), original_flavor, "The display changed shared employer flavor.")
 	TEST_ASSERT_EQUAL(json_encode(traitor.objectives), json_encode(original_objectives), "The display changed objectives.")
@@ -187,23 +200,28 @@
 	TEST_ASSERT(!("sierra_antagonist_background" in serialized_mind), "The private snapshot entered ordinary mind serialization.")
 	TEST_ASSERT(preferences.update_preference(notes, "LATE_EDIT_SENTINEL"), "Could not edit the other active preferences.")
 	character.capture_sierra_antagonist_background(preferences)
-	TEST_ASSERT(!findtext(traitor.get_sierra_antagonist_intro(body, standard_intro), "LATE_EDIT_SENTINEL"), "A late role reread mutable preferences instead of its character snapshot.")
-	traitor.employer = "Donk Corporation"
-	traitor.pick_employer()
-	standard_intro = traitor.traitor_flavor["introduction"]
-	var/list/conflicting_data = traitor.ui_static_data(body)
-	TEST_ASSERT_EQUAL(conflicting_data["intro"], standard_intro, "A conflicting organization was presented as a real assignment.")
-	traitor.employer = "Cybersun Industries"
-	traitor.pick_employer()
-	standard_intro = traitor.traitor_flavor["introduction"]
-	TEST_ASSERT_EQUAL(traitor.get_sierra_antagonist_intro(body, standard_intro), standard_intro, "An incompatible selected subgroup was ignored.")
-	traitor.employer = "Corporate Climber"
-	traitor.pick_employer()
-	standard_intro = traitor.traitor_flavor["introduction"]
-	TEST_ASSERT_EQUAL(traitor.get_sierra_antagonist_intro(body, standard_intro), standard_intro, "A Syndicate biography overrode a Nanotrasen role.")
+	biography = traitor.get_sierra_antagonist_background(body)
+	TEST_ASSERT(!findtext(biography?["notes"], "LATE_EDIT_SENTINEL"), "A late role reread mutable preferences instead of its character snapshot.")
+	for(var/assigned_employer in list("Donk Corporation", "Cybersun Industries", "Corporate Climber"))
+		traitor.employer = assigned_employer
+		traitor.pick_employer()
+		standard_intro = traitor.traitor_flavor["introduction"]
+		var/list/conflicting_data = traitor.ui_static_data(body)
+		biography = conflicting_data["personal_background"]
+		TEST_ASSERT_EQUAL(biography?["notes"], "PRIVATE_SENTINEL: прежняя служба.", "A different employer hid the separately labelled character biography.")
+		TEST_ASSERT_EQUAL(conflicting_data["intro"], standard_intro, "The biography replaced a conflicting real assignment.")
+		TEST_ASSERT_EQUAL(traitor.employer, assigned_employer, "Displaying a biography changed the assigned employer.")
+	character.sierra_antagonist_background = list("organization" = "Interdyne", "subgroup" = "none", "notes" = "INTERDYNE_SENTINEL")
+	biography = traitor.get_sierra_antagonist_background(body)
+	TEST_ASSERT_EQUAL(biography?["notes"], "INTERDYNE_SENTINEL", "An organization without a native employer can never display its biography.")
 	character.sierra_antagonist_background = list("organization" = "none", "subgroup" = "none", "notes" = "PRIVATE_SENTINEL")
-	TEST_ASSERT_EQUAL(traitor.get_sierra_antagonist_intro(body, standard_intro), standard_intro, "An unset organization changed the native introduction.")
+	biography = traitor.get_sierra_antagonist_background(body)
+	TEST_ASSERT_EQUAL(biography?["notes"], "PRIVATE_SENTINEL", "A text-only biography was hidden without an organization.")
+	TEST_ASSERT_NULL(biography?["organization"], "An unset organization was displayed as a real affiliation.")
+	TEST_ASSERT_NULL(biography?["subgroup"], "An unset subgroup was displayed as a real affiliation.")
 	character.sierra_antagonist_background = list("organization" = "Cybersun", "subgroup" = "none", "notes" = "")
-	TEST_ASSERT_EQUAL(traitor.get_sierra_antagonist_intro(body, standard_intro), standard_intro, "Empty notes changed the native introduction.")
+	TEST_ASSERT_NULL(traitor.get_sierra_antagonist_background(body), "Empty notes created a private biography panel.")
+	character.sierra_antagonist_background["notes"] = " \t\n"
+	TEST_ASSERT_NULL(traitor.get_sierra_antagonist_background(body), "Whitespace-only notes created a private biography panel.")
 	character.sierra_antagonist_background = null
-	TEST_ASSERT_EQUAL(traitor.get_sierra_antagonist_intro(body, standard_intro), standard_intro, "A character without a snapshot did not retain native behavior.")
+	TEST_ASSERT_NULL(traitor.get_sierra_antagonist_background(body), "A character without a snapshot received a biography.")

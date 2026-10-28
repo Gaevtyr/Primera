@@ -1,4 +1,4 @@
-import { BlockQuote, Button, Section, Stack } from 'tgui-core/components';
+import { BlockQuote, Box, Button, Section, Stack } from 'tgui-core/components';
 import type { BooleanLike } from 'tgui-core/react';
 
 import { useBackend } from '../backend';
@@ -35,15 +35,44 @@ type Info = {
   uplink_unlock_info: string;
   given_uplink: BooleanLike;
   objectives: Objective[];
+  // BANDASTATION ADDITION START - Private character biography
+  personal_background?: {
+    organization: string | null;
+    subgroup: string | null;
+    notes: string;
+  } | null;
+  // BANDASTATION ADDITION END - Private character biography
 };
 
 const IntroductionSection = (props) => {
   const { act, data } = useBackend<Info>();
-  const { intro, objectives } = data;
+  const { intro, objectives, personal_background } = data;
   return (
     <Section fill title="Введение" scrollable>
       <Stack vertical fill>
         <Stack.Item fontSize="25px">{intro}</Stack.Item>
+        {/* BANDASTATION ADDITION START - Private character biography */}
+        {personal_background && (
+          <Stack.Item>
+            <Section title="Личная предыстория">
+              <Box color="label" mb={1}>
+                Биографическая заметка из анкеты. Наниматель и задачи этого
+                раунда указаны отдельно и не зависят от неё.
+              </Box>
+              {personal_background.organization && (
+                <Box mb={1}>
+                  Организация из анкеты: {personal_background.organization}
+                  {personal_background.subgroup &&
+                    ` → ${personal_background.subgroup}`}
+                </Box>
+              )}
+              <Box style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                {personal_background.notes}
+              </Box>
+            </Section>
+          </Stack.Item>
+        )}
+        {/* BANDASTATION ADDITION END - Private character biography */}
         <Stack.Item grow>
           <ObjectivePrintout objectives={objectives} />
         </Stack.Item>
