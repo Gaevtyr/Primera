@@ -26,6 +26,12 @@
 	TEST_ASSERT_EQUAL(length(vulp_choices), 5, "Vulpkanin membership contains duplicate or unconfirmed options.")
 	TEST_ASSERT_EQUAL(catalog["vulp_rakh"]["name"], "Рахт", "The clan name does not match the approved spelling.")
 	TEST_ASSERT_EQUAL(length(get_sierra_background_choices("social", /datum/species/skrell)), 5, "Genetic Skrell castes changed during the social audit.")
+	var/list/house_descriptions = list()
+	for(var/house_id in list("tajaran_kaitam", "tajaran_hadii", "tajaran_sendai"))
+		var/list/house = catalog[house_id]
+		TEST_ASSERT(house, "The Tajaran house [house_id] lost its existing saved ID.")
+		TEST_ASSERT(!(house["description"] in house_descriptions), "Tajaran house [house_id] repeats another house's description.")
+		house_descriptions += house["description"]
 
 /// Exercise the actual middleware after each native species change, including hidden fields.
 /datum/unit_test/sierra_background_social_species_changes
