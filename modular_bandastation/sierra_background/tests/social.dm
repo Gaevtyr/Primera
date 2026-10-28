@@ -51,3 +51,54 @@
 			TEST_ASSERT(preference.is_valid(choice, preferences), "The server rejects a displayed social choice for [species_id].")
 		for(var/choice in list("vulp_rakh", "vulp_mzmanulin", "vulp_refugee"))
 			TEST_ASSERT_EQUAL((choice in choices), species_id == "vulpkanin", "Vulpkanin membership [choice] crossed species boundaries.")
+
+/// The published clan list reaches the ordinary chooser and preserves the old Zessur slot key.
+/datum/unit_test/sierra_background_unathi_clans
+	parent_type = /datum/unit_test/sierra_background_fixture
+
+/datum/unit_test/sierra_background_unathi_clans/Run()
+	var/list/clans = list(
+		"unathi_szaahi" = "Сзаахи",
+		"unathi_usshulu" = "Усшулу",
+		"unathi_kharsi" = "Кхарси",
+		"unathi_zessur" = "Зессур",
+		"unathi_shursi" = "Шурси",
+		"unathi_uzo" = "Узо (внеклановые)",
+	)
+	var/datum/client_interface/mock_client = allocate(/datum/client_interface)
+	var/datum/preferences/preferences = make_preferences(mock_client)
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/species, "lizard"), "Could not prepare an Unathi character.")
+	var/datum/preference_middleware/sierra_background/middleware = background_middleware(preferences)
+	var/list/row = background_row(preferences, "social")
+	var/list/choices = row["choices"]
+	TEST_ASSERT_EQUAL(length(choices), 7, "The complete Unathi list must include five clans, Uzo and an unset answer.")
+	TEST_ASSERT("none" in choices, "An unset answer was conflated with the Uzo social status.")
+	var/list/ui_catalog = middleware.get_constant_data()
+	var/list/ui_social = ui_catalog["social"]
+	for(var/id in clans)
+		TEST_ASSERT(id in choices, "The native UI is missing published Unathi choice [id].")
+		var/list/entry = ui_social[id]
+		TEST_ASSERT_EQUAL(entry["name"], clans[id], "The displayed Unathi name differs from the published list.")
+		TEST_ASSERT(length(entry["description"]), "The Unathi chooser cannot display a clan description.")
+		var/list/params = list("preference" = "sierra_social", "value" = id, "slot" = preferences.default_slot, "species" = "lizard")
+		TEST_ASSERT(middleware.choose_background(params, null), "The native chooser rejects a listed Unathi clan.")
+		TEST_ASSERT_EQUAL(preferences.read_preference(/datum/preference/choiced/sierra_background/social), id, "The confirmed clan did not reach character preferences.")
+		for(var/species_id in GLOB.species_list)
+			if(species_id == "lizard")
+				continue
+			var/list/foreign_choices = get_sierra_background_choices("social", GLOB.species_list[species_id])
+			TEST_ASSERT(!(id in foreign_choices), "Unathi social membership is offered to [species_id].")
+	var/list/zessur = ui_social["unathi_zessur"]
+	TEST_ASSERT(!findtext(zessur["description"], "спутник"), "Zessur still shows a moon description instead of clan information.")
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/social, "unathi_zessur"), "The established Zessur ID no longer works.")
+	TEST_ASSERT(preferences.save_character(), "Could not save the existing Zessur character.")
+	preferences.switch_to_slot(2)
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/species, "lizard"), "Could not prepare the second Unathi slot.")
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/social, "unathi_uzo"), "Could not select the explicit clanless status.")
+	TEST_ASSERT(preferences.save_character(), "Could not save the Uzo character.")
+	TEST_ASSERT(preferences.save_preferences(), "Could not flush both native character slots.")
+	var/datum/preferences/reloaded = make_preferences(mock_client)
+	TEST_ASSERT_EQUAL(reloaded.default_slot, 2, "Reopening preferences lost the active Unathi slot.")
+	TEST_ASSERT_EQUAL(reloaded.read_preference(/datum/preference/choiced/sierra_background/social), "unathi_uzo", "Uzo was replaced with an unset answer during loading.")
+	reloaded.switch_to_slot(1)
+	TEST_ASSERT_EQUAL(reloaded.read_preference(/datum/preference/choiced/sierra_background/social), "unathi_zessur", "The expanded clan list changed the old Zessur selection.")
