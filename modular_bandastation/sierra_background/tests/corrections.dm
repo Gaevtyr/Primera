@@ -122,7 +122,7 @@
 	TEST_ASSERT("NewBrazil" in row["context_choices"], "The Seeker branch lost its Luman environment.")
 	TEST_ASSERT(!("Avalon" in row["context_choices"]), "The northern short list was not filtered from the southern branch.")
 	TEST_ASSERT("Magnitka" in row["choices"], "Context grouping turned into an unsupported ban on migrant residence.")
-	TEST_ASSERT("Limneya" in row["context_choices"], "The neutral mixed port was removed from the short list.")
+	TEST_ASSERT(!("Limneya" in row["context_choices"]), "The northern branch still treats Limneya as a shared world.")
 	var/list/northern_choices = row["context_choices"]
 	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/subfaction, "SeekersWings"), "Could not select a third-level branch.")
 	row = background_row(preferences, "homeworld")
@@ -131,7 +131,7 @@
 	row = background_row(preferences, "homeworld")
 	TEST_ASSERT("Avalon" in row["context_choices"], "The Order did not offer its southern environment.")
 	TEST_ASSERT(!("Altam" in row["context_choices"]), "Changing subdivision left the northern short list unchanged.")
-	TEST_ASSERT("Limneya" in row["context_choices"], "Changing subdivision removed the shared port.")
+	TEST_ASSERT(!("Limneya" in row["context_choices"]), "The southern branch still treats Limneya as a shared world.")
 	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/homeworld, "Earth"), "An allowed migrant residence outside the short list was rejected.")
 	row = background_row(preferences, "culture")
 	TEST_ASSERT("earth_upbringing" in row["context_choices"], "Earth residence did not suggest Earth upbringing.")
@@ -151,6 +151,41 @@
 	TEST_ASSERT(!edit_background(preferences, /datum/preference/choiced/sierra_background/homeworld, "Earth"), "The full list bypassed the closed human residence rule.")
 	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/homeworld, "Magnitka"), "A Skrell migrant lost access to mixed Soviet society.")
 	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/culture, "kssp"), "A Skrell migrant lost valid Soviet upbringing.")
+
+/// Limneya follows the faction's normal residence context without invalidating a migrant's selection.
+/datum/unit_test/sierra_background_limneya_context
+	parent_type = /datum/unit_test/sierra_background_fixture
+
+/datum/unit_test/sierra_background_limneya_context/Run()
+	var/datum/preferences/preferences = make_preferences()
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/species, "human"), "Could not prepare Limneya context choices.")
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/homeworld, "other"), "Could not clear the selected residence.")
+	var/list/contexts = list(
+		list("faction" = "Imperium", "subfaction" = "none", "primary" = FALSE),
+		list("faction" = "Nanotrasen", "subfaction" = "none", "primary" = FALSE),
+		list("faction" = "Elysium", "subfaction" = "none", "primary" = FALSE),
+		list("faction" = "TSF", "subfaction" = "none", "primary" = FALSE),
+		list("faction" = "CUSP", "subfaction" = "none", "primary" = FALSE),
+		list("faction" = "Free", "subfaction" = "Seekers", "primary" = FALSE),
+		list("faction" = "Free", "subfaction" = "SeekersWings", "primary" = FALSE),
+		list("faction" = "Free", "subfaction" = "OrdoLex", "primary" = FALSE),
+		list("faction" = "Free", "subfaction" = "FreeCartel", "primary" = TRUE),
+		list("faction" = "Free", "subfaction" = "WitherVit", "primary" = TRUE),
+		list("faction" = "Free", "subfaction" = "none", "primary" = TRUE),
+		list("faction" = "none", "subfaction" = "none", "primary" = TRUE),
+	)
+	for(var/list/context as anything in contexts)
+		TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/faction, context["faction"]), "Could not select the Limneya faction context.")
+		TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/subfaction, context["subfaction"]), "Could not select the Limneya subdivision context.")
+		var/list/row = background_row(preferences, "homeworld")
+		TEST_ASSERT("Limneya" in row["choices"], "Limneya disappeared from the allowed diaspora pool.")
+		TEST_ASSERT_EQUAL(("Limneya" in row["context_choices"]), context["primary"], "Limneya has the wrong primary visibility for [context["faction"]]/[context["subfaction"]].")
+		TEST_ASSERT("other" in row["context_choices"], "Filtering Limneya removed the neutral residence option.")
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/homeworld, "Limneya"), "The diaspora residence cannot be selected.")
+	TEST_ASSERT(edit_background(preferences, /datum/preference/choiced/sierra_background/faction, "Nanotrasen"), "Could not change the migrant's employer.")
+	var/list/row = background_row(preferences, "homeworld")
+	TEST_ASSERT_EQUAL(row["value"], "Limneya", "Changing faction erased the migrant's compatible residence.")
+	TEST_ASSERT(!("Limneya" in row["context_choices"]), "A saved diaspora residence leaked into the primary pool.")
 
 /// Loading a known conflict clears only contradictory choices and provides an owner-visible notice.
 /datum/unit_test/sierra_background_correction_load_conflicts

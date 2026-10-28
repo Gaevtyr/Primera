@@ -19,6 +19,9 @@
 				languages += /datum/language/spinwarder
 				profile["name_language"] = /datum/language/spinwarder
 				profile["name_label"] = "Неорусские имена"
+			else if(culture["faction"] == "TSF")
+				var/list/languages = profile["languages"]
+				languages += /datum/language/uncommon
 			else if(culture["faction"] == "Elysium")
 				var/list/languages = profile["languages"]
 				languages += /datum/language/gutter

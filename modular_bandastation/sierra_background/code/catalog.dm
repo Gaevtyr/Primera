@@ -185,10 +185,9 @@
 	if(!islist(context_ids) && !length(territories))
 		return choices.Copy()
 	var/list/context_choices = list()
-	var/list/shared_worlds = pools?["shared_homeworlds"]
 	for(var/id in choices)
 		var/list/entry = entries[id]
-		if(id == get_sierra_background_neutral(category) || (id in context_ids) || (category == "homeworld" && (id in shared_worlds)) || (!islist(context_ids) && (entry["faction"] in territories)))
+		if(id == get_sierra_background_neutral(category) || (id in context_ids) || (!islist(context_ids) && (entry["faction"] in territories)))
 			context_choices += id
 	return context_choices
 
