@@ -12,15 +12,12 @@ const details = {
   consequences: 'Нельзя выйти',
   steps: 'Нажать на дверь',
   log: '<test> && "quoted"',
-  approver_note: '',
 };
 
-function setData(reviewing = false, fields = {}) {
+function setData(fields = {}, sending = false) {
   store.set(gameDataAtom, {
     report_details: fields,
-    awaiting_approval: reviewing,
-    sending: false,
-    author: 'Reporter',
+    sending,
     title_limit: 256,
     text_limit: 4096,
     log_limit: 8192,
@@ -30,26 +27,23 @@ function setData(reviewing = false, fields = {}) {
 afterEach(resetStore);
 
 describe('BugReportForm', () => {
-  it('blocks incomplete reports and hides the staff note from authors', () => {
+  it('blocks incomplete reports', () => {
     const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
     setData();
     render(<BugReportForm />);
-    expect(
-      screen.queryByLabelText('Примечание проверяющего (необязательно)'),
-    ).toBeNull();
-    fireEvent.click(screen.getByText('Отправить на проверку'));
+    fireEvent.click(screen.getByText('Опубликовать на GitHub'));
     expect(sendAct).not.toHaveBeenCalled();
     sendAct.mockRestore();
   });
 
-  it('submits the visible fields including unmodified logs', () => {
+  it('publishes the visible fields directly including unmodified logs', () => {
     const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
-    setData(false, details);
+    setData(details);
     render(<BugReportForm />);
     fireEvent.change(screen.getByLabelText('Заголовок'), {
       target: { value: 'Новое название' },
     });
-    fireEvent.click(screen.getByText('Отправить на проверку'));
+    fireEvent.click(screen.getByText('Опубликовать на GitHub'));
     expect(sendAct).toHaveBeenCalledWith('confirm', {
       ...details,
       title: 'Новое название',
@@ -57,21 +51,13 @@ describe('BugReportForm', () => {
     sendAct.mockRestore();
   });
 
-  it('lets staff review and edit a report before publishing', () => {
+  it('blocks duplicate submissions and cancellation while sending', () => {
     const sendAct = spyOn(actions, 'sendAct').mockImplementation(() => {});
-    setData(true, details);
+    setData(details, true);
     render(<BugReportForm />);
-    fireEvent.change(
-      screen.getByLabelText('Примечание проверяющего (необязательно)'),
-      {
-        target: { value: 'Воспроизводится' },
-      },
-    );
     fireEvent.click(screen.getByText('Опубликовать на GitHub'));
-    expect(sendAct).toHaveBeenCalledWith('confirm', {
-      ...details,
-      approver_note: 'Воспроизводится',
-    });
+    fireEvent.click(screen.getByText('Отмена'));
+    expect(sendAct).not.toHaveBeenCalled();
     sendAct.mockRestore();
   });
 });
