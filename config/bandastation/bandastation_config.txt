@@ -32,6 +32,9 @@ AI_SECRETARY_MODEL gpt-oss:20b-cloud
 ROUNDSTART_RACES vulpkanin
 ROUNDSTART_RACES tajaran
 ROUNDSTART_RACES vox
+# AI EDIT START - Make the new dwarf species selectable in default deployments.
+ROUNDSTART_RACES dwarf
+# AI EDIT END
 
 ## Automatic crew transfer
 
